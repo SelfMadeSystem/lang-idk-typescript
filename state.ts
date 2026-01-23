@@ -1,115 +1,164 @@
 import {
+  type Parser,
+  type ParserResult,
+  type InputState,
   createInputState,
   withState,
-  remStr,
-  type InputState,
-  type ParserResult,
-  type Parser,
   literal,
-  nextWord,
+  regex,
   skipWhitespace,
+  sequence,
+  map,
   choice,
   many,
+  eof,
 } from "./parser";
 
-type MyState = { stack: string[] };
-type MyInput = InputState<MyState>;
+/**
+ * Example: Variable Declaration and Usage Parser
+ *
+ * This example demonstrates using custom state to track defined variables
+ * while parsing a simple variable declaration and reference language.
+ */
 
-type Item =
-  | { type: "push"; name: string }
-  | { type: "pop"; name: string | null }
-  | { type: "word"; text: string };
+// Custom state type: tracks variables that have been declared
+type VarState = {
+  definedVars: Set<string>;
+};
+
+// Token types
+type VarToken =
+  | { type: "declare"; name: string }
+  | { type: "reference"; name: string }
+  | { type: "error"; message: string };
 
 /**
- * Parses a "@push NAME" directive and updates the user state by pushing NAME.
+ * Parses a variable name (identifier)
  */
-const pushCmd: Parser<Item, MyState> = (input: MyInput) => {
-  // sequence(literal("@push"), skipWhitespace, nextWord)
-  const seq = (input0: MyInput) => {
-    const a = literal("@push")(input0);
-    if (!a.success) return a;
-    const b = skipWhitespace(a.remaining);
-    if (!b.success) return b;
-    const c = nextWord(b.remaining);
-    if (!c.success) return c;
+const identifier: Parser<string, VarState> = (input: InputState<VarState>) => {
+  const nameResult = regex(/^[a-zA-Z_][a-zA-Z0-9_]*/)(input);
+  if (!nameResult.success) {
+    return nameResult;
+  }
+  return nameResult;
+};
+
+/**
+ * Parses a variable declaration: "let x" or "const y"
+ * Updates the state to track the new variable
+ */
+const varDeclaration: Parser<VarToken, VarState> = (
+  input: InputState<VarState>,
+) => {
+  // Try to parse "let" or "const"
+  const declKeyword = choice(literal("let", true), literal("const", true));
+
+  const declResult = declKeyword(input);
+  if (!declResult.success) {
+    return declResult;
+  }
+
+  // Skip whitespace after keyword
+  const skipWsResult = skipWhitespace(declResult.remaining);
+  if (!skipWsResult.success) {
+    return skipWsResult;
+  }
+
+  // Parse the identifier
+  const idResult = identifier(skipWsResult.remaining);
+  if (!idResult.success) {
+    return idResult;
+  }
+
+  const varName = idResult.value;
+  const newState = {
+    definedVars: new Set([
+      ...(idResult.remaining.state?.definedVars || []),
+      varName,
+    ]),
+  };
+
+  return {
+    success: true,
+    value: { type: "declare" as const, name: varName },
+    remaining: withState(idResult.remaining, newState),
+  };
+};
+
+/**
+ * Parses a variable reference
+ * Checks if the variable is defined in the state
+ */
+const varReference: Parser<VarToken, VarState> = (
+  input: InputState<VarState>,
+) => {
+  const idResult = identifier(input);
+  if (!idResult.success) {
+    return idResult;
+  }
+
+  const varName = idResult.value;
+  const definedVars = idResult.remaining.state?.definedVars || new Set();
+
+  if (!definedVars.has(varName)) {
     return {
-      success: true,
-      value: [a.value, null, c.value],
-      remaining: c.remaining,
-    } as const;
+      success: false,
+      error: `Variable '${varName}' is not defined`,
+    };
+  }
+
+  return {
+    success: true,
+    value: { type: "reference" as const, name: varName },
+    remaining: idResult.remaining,
   };
-
-  const result = seq(input);
-  if (!result.success) return result;
-  const name = result.value[2]!;
-  const prior = (input.state as MyState | undefined) ?? { stack: [] };
-  const newState: MyState = { stack: [...prior.stack, name] };
-  return {
-    success: true,
-    value: { type: "push", name },
-    remaining: withState<MyState>(result.remaining, newState),
-  } as const;
 };
 
 /**
- * Parses a "@pop" directive and updates the user state by popping.
+ * Parses a single statement (declaration or reference)
  */
-const popCmd: Parser<Item, MyState> = (input: MyInput) => {
-  const res = literal("@pop")(input);
-  if (!res.success) return res;
-  const prior = (input.state as MyState | undefined) ?? { stack: [] };
-  const popped = prior.stack.length
-    ? prior.stack[prior.stack.length - 1]!
-    : null;
-  const newState: MyState = {
-    stack: prior.stack.slice(0, Math.max(0, prior.stack.length - 1)),
+const statement: Parser<VarToken, VarState> = (input: InputState<VarState>) => {
+  const skipWsResult = skipWhitespace(input);
+  if (!skipWsResult.success) {
+    return skipWsResult;
+  }
+
+  const choiceResult = choice(
+    varDeclaration,
+    varReference,
+  )(skipWsResult.remaining);
+  if (!choiceResult.success) {
+    return choiceResult;
+  }
+
+  // Skip trailing whitespace
+  const trailingWsResult = skipWhitespace(choiceResult.remaining);
+  if (!trailingWsResult.success) {
+    return trailingWsResult;
+  }
+
+  return {
+    success: true,
+    value: choiceResult.value,
+    remaining: trailingWsResult.remaining,
   };
-  return {
-    success: true,
-    value: { type: "pop", name: popped },
-    remaining: withState<MyState>(res.remaining, newState),
-  } as const;
 };
 
 /**
- * Parses a plain word token (does not change state).
+ * Parses a program: multiple statements separated by newlines
  */
-const wordCmd: Parser<Item, MyState> = (input: MyInput) => {
-  const res = nextWord(input);
-  if (!res.success) return res;
-  return {
-    success: true,
-    value: { type: "word", text: res.value },
-    remaining: res.remaining,
-  } as const;
-};
+const program: Parser<VarToken[], VarState> = many(statement);
 
-/**
- * Combine: skip leading whitespace, then try push/pop/word.
- */
-const itemParser = (input: MyInput): ParserResult<Item, MyState> => {
-  const skipped = skipWhitespace(input);
-  if (!skipped.success) return skipped;
-  return choice(pushCmd, popCmd, wordCmd)(skipped.remaining);
-};
+// Example usage:
+const input = "let x\nlet y\nx\ny\nz";
+const initialState: VarState = { definedVars: new Set() };
+const parseResult = program(createInputState(input, initialState));
 
-/**
- * Parse many items until EOF or no more tokens.
- */
-const parser = many(itemParser);
-
-const sample = "@push A\nhello world\n@push B\nfoo @pop bar\n";
-const initial = createInputState<MyState>(sample, { stack: [] });
-
-const result = parser(initial);
-
-if (result.success) {
-  console.log("Parsed items:", JSON.stringify(result.value, null, 2));
-  console.log(
-    "Final user state:",
-    JSON.stringify(result.remaining.state, null, 2),
-  );
-  console.log("Remaining text:", JSON.stringify(remStr(result.remaining)));
+if (parseResult.success) {
+  console.log("Parsed successfully:");
+  console.log(parseResult.value);
+  console.log("Remaining input:", parseResult.remaining);
+  console.log("Final defined vars:", parseResult.remaining.state?.definedVars);
 } else {
-  console.error("Parse error:", result.error);
+  console.log("Parse error:", parseResult.error);
 }

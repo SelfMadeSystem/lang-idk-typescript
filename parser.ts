@@ -1,12 +1,15 @@
+export type ErrorResult = { success: false; error: string };
+export type SuccessResult<T, S> = { success: true; value: T; remaining: InputState<S> };
+
 /**
  * Result of a parser operation, indicating success or failure.
  *
  * If successful, contains the parsed value and remaining input.
  * If failed, contains an error message.
  */
-export type ParserResult<T, S = unknown> =
-  | { success: true; value: T; remaining: InputState<S> }
-  | { success: false; error: string };
+export type ParserResult<T, S> =
+  | SuccessResult<T, S>
+  | ErrorResult;
 
 /**
  * Input to a parser function.
@@ -98,8 +101,6 @@ export type Parser<T, S = unknown> = (
 
 type GParser = Parser<any, any>;
 
-type ErrorFn = (...input: any) => ParserResult<never>;
-
 const er = <S>(
   strings: TemplateStringsArray,
   ...values: any[]
@@ -111,9 +112,7 @@ const er = <S>(
   return { success: false, error: message };
 };
 
-const ers = {
-  EOF: <S>() => er<S>`Unexpected end of input.`,
-} as const satisfies Record<string, ErrorFn>;
+const EOF: ErrorResult = { success: false, error: "Unexpected end of input." };
 
 type GetT<P extends GParser> = P extends Parser<infer R, any> ? R : never;
 type GetS<P extends GParser> = P extends Parser<any, infer U> ? U : never;
@@ -121,12 +120,12 @@ type GetS<P extends GParser> = P extends Parser<any, infer U> ? U : never;
 /**
  * Parses a single character. If a character is provided, it parses that specific character.
  */
-export const char = <S>(char?: string): Parser<string, S> => {
+export const char = (char?: string): Parser<string> => {
   if (char === undefined) {
-    return (input: InputState<S>): ParserResult<string, S> => {
+    return <S>(input: InputState<S>): ParserResult<string, S> => {
       const rem = remStr(input);
       if (rem.length === 0) {
-        return ers.EOF();
+        return EOF;
       }
       return {
         success: true,
@@ -135,10 +134,10 @@ export const char = <S>(char?: string): Parser<string, S> => {
       };
     };
   }
-  return (input: InputState<S>): ParserResult<string, S> => {
+  return <S>(input: InputState<S>): ParserResult<string, S> => {
     const rem = remStr(input);
     if (rem.length === 0) {
-      return ers.EOF();
+      return EOF;
     }
     if (char.includes(rem[0]!)) {
       return {
@@ -168,7 +167,7 @@ export const whitespace = <S>(
 ): ParserResult<string, S> => {
   const rem = remStr(input);
   if (rem.length === 0) {
-    return ers.EOF();
+    return EOF;
   }
   const char = rem[0]!;
   if (char === " " || char === "\t" || char === "\n" || char === "\r") {
@@ -198,11 +197,11 @@ export const skipWhitespace = <S>(
  * Parses a specific literal string from the input.
  */
 export const literal =
-  <T extends string, S>(literal: T, caseSensitive = true) =>
-  (input: InputState<S>): ParserResult<T, S> => {
+  <T extends string>(literal: T, caseSensitive = true) =>
+  <S>(input: InputState<S>): ParserResult<T, S> => {
     const rem = remStr(input);
     if (rem.length < literal.length) {
-      return ers.EOF();
+      return EOF;
     }
     const inputSlice = rem.slice(0, literal.length);
     const matches = caseSensitive
@@ -220,11 +219,11 @@ export const literal =
 /**
  * Parses input matching a given regular expression pattern.
  */
-export const regex = <S>(pattern: RegExp) => {
+export const regex = (pattern: RegExp) => {
   if (pattern.flags.indexOf("y") === -1) {
     pattern = new RegExp(pattern.source, pattern.flags + "y");
   }
-  return (input: InputState<S>): ParserResult<string, S> => {
+  return <S>(input: InputState<S>): ParserResult<string, S> => {
     pattern.lastIndex = 0;
     const rem = remStr(input);
     const match = pattern.exec(rem);
@@ -245,7 +244,7 @@ export const regex = <S>(pattern: RegExp) => {
 export const nextWord = <S>(input: InputState<S>): ParserResult<string, S> => {
   const rem = remStr(input);
   if (rem.length === 0) {
-    return ers.EOF();
+    return EOF;
   }
   const match = /^[^\s]+/.exec(rem);
   if (match) {
@@ -265,9 +264,9 @@ export const choice =
   <Parsers extends GParser[]>(
     ...parsers: Parsers
   ): Parser<GetT<Parsers[number]>, GetS<Parsers[number]>> =>
-  (
-    input: InputState<Parsers[number] extends Parser<any, infer S> ? S : never>,
-  ): ParserResult<GetT<Parsers[number]>, GetS<Parsers[number]>> => {
+  <S>(
+    input: InputState<S>,
+  ): ParserResult<GetT<Parsers[number]>, S> => {
     for (const parser of parsers) {
       const result = parser(input);
       if (result.success) {
@@ -288,13 +287,13 @@ export const sequence =
     },
     GetS<Parsers[number]>
   > =>
-  (
-    input: InputState<GetS<Parsers[number]>>,
+  <S>(
+    input: InputState<S>,
   ): ParserResult<
     {
       [K in keyof Parsers]: GetT<Parsers[K]>;
     },
-    GetS<Parsers[number]>
+    S
   > => {
     const values: any[] = [];
     let remaining = input;
@@ -323,7 +322,7 @@ export const sequence =
  */
 export const many =
   <P extends GParser>(parser: P): Parser<GetT<P>[], GetS<P>> =>
-  (input: InputState<GetS<P>>): ParserResult<GetT<P>[], GetS<P>> => {
+  <S>(input: InputState<S>): ParserResult<GetT<P>[], S> => {
     const values: unknown[] = [];
     let remaining = input;
     while (true) {
@@ -348,7 +347,7 @@ export const map =
     parser: P,
     fn: (value: GetT<P>) => U,
   ): Parser<U, GetS<P>> =>
-  (input: InputState<GetS<P>>): ParserResult<U, GetS<P>> => {
+  <S>(input: InputState<S>): ParserResult<U, S> => {
     const result = parser(input);
     if (!result.success) {
       return result;
@@ -367,9 +366,9 @@ export const not =
     parser: P,
     ifNotParser: R,
   ): Parser<GetT<R>, GetS<P> & GetS<R>> =>
-  (
-    input: InputState<GetS<P> & GetS<R>>,
-  ): ParserResult<GetT<R>, GetS<P> & GetS<R>> => {
+  <S>(
+    input: InputState<S>,
+  ): ParserResult<GetT<R>, S> => {
     const result = parser(input);
     if (result.success) {
       return er`Expected parser to fail but it succeeded.`;
@@ -381,7 +380,7 @@ export const not =
  */
 export const optional =
   <P extends GParser>(parser: P): Parser<GetT<P> | null, GetS<P>> =>
-  (input: InputState<GetS<P>>): ParserResult<GetT<P> | null, GetS<P>> => {
+  <S>(input: InputState<S>): ParserResult<GetT<P> | null, S> => {
     const result = parser(input);
     if (result.success) {
       return result;
@@ -396,9 +395,9 @@ export const sepBy =
     parser: P,
     separator: SParser,
   ): Parser<GetT<P>[], GetS<P> & GetS<SParser>> =>
-  (
-    input: InputState<GetS<P> & GetS<SParser>>,
-  ): ParserResult<GetT<P>[], GetS<P> & GetS<SParser>> => {
+  <S>(
+    input: InputState<S>,
+  ): ParserResult<GetT<P>[], S> => {
     const values: GetT<P>[] = [];
     let remaining = input;
 
@@ -446,7 +445,7 @@ export function recursive<T, S = unknown>(
  */
 export const lookahead =
   <P extends GParser>(parser: P): Parser<GetT<P>, GetS<P>> =>
-  (input: InputState<GetS<P>>): ParserResult<GetT<P>, GetS<P>> => {
+  <S>(input: InputState<S>): ParserResult<GetT<P>, S> => {
     const result = parser(input);
     if (!result.success) {
       return result;
@@ -468,7 +467,7 @@ export const lookahead =
 export const alpha = <S>(input: InputState<S>): ParserResult<string, S> => {
   const rem = remStr(input);
   if (rem.length === 0) {
-    return ers.EOF();
+    return EOF;
   }
   const char = rem[0]!;
   if ((char >= "a" && char <= "z") || (char >= "A" && char <= "Z")) {
@@ -485,7 +484,7 @@ export const alphanumeric = <S>(
 ): ParserResult<string, S> => {
   const rem = remStr(input);
   if (rem.length === 0) {
-    return ers.EOF();
+    return EOF;
   }
   const char = rem[0]!;
   if (
@@ -506,7 +505,7 @@ export const digit =
   (input: InputState<S>): ParserResult<string, S> => {
     const rem = remStr(input);
     if (rem.length === 0) {
-      return ers.EOF();
+      return EOF;
     }
     const char = rem[0]!;
     const digit = parseInt(char, radix);
@@ -523,7 +522,7 @@ export const digit =
 export const number = <S>(input: InputState<S>): ParserResult<string, S> => {
   const rem = remStr(input);
   if (rem.length === 0) {
-    return ers.EOF();
+    return EOF;
   }
   const match = /^[+-]?(\d+(\.\d*)?|\.\d+)/.exec(rem);
   if (match) {
@@ -544,7 +543,7 @@ export const exponentNumber = <S>(
 ): ParserResult<string, S> => {
   const rem = remStr(input);
   if (rem.length === 0) {
-    return ers.EOF();
+    return EOF;
   }
   const match = /^[+-]?(\d+(\.\d*)?|\.\d+)[eE][+-]?\d+/.exec(rem);
   if (match) {
