@@ -1,6 +1,5 @@
-import parsers from "./parser";
-
-const {
+import {
+  createInputState,
   char,
   literal,
   sequence,
@@ -10,7 +9,7 @@ const {
   many,
   skipWhitespace,
   anyNumber,
-} = parsers;
+} from "./parser";
 
 type Expression =
   | { type: "Number"; value: number }
@@ -97,7 +96,7 @@ const expressionParser = recursive<Expression>((expr) => {
 const input = "3+ -5.5*(2--8)";
 
 // Parse the input
-const result = expressionParser(input);
+const result = expressionParser(createInputState(input));
 
 const interpret = (expr: Expression): number => {
   switch (expr.type) {
