@@ -1,0 +1,184 @@
+// My custom language. Primary goals:
+// - Powerful implicit types, with a focus on type inference and type safety.
+// - Minimize boilerplate and nesting, while still allowing for complex data structures and operations.
+// - Compile-time and run-time type checking
+
+// Example usage:
+// (I'll have "explicit typed" version followed by "inferred typed" version, to show the difference)
+fn add<A, B, C where A: Add<B, Output=C>>(x: A, y: B) -> C;
+fn add(x, y) {
+  return x + y;
+}
+
+fn length(collection: Iterable<?>) -> Int; // ? being a special wildcard type
+fn length(collection) {
+  var count = 0;
+  for _ in collection {
+    count += 1;
+  }
+  return count;
+}
+
+fn map<A, B>(collection: Iterable<A>, func: Fn(A) -> B) -> Iterable<B>;
+fn map(collection, func) {
+  var result = [];
+  for item in collection {
+    result.append(func(item));
+  }
+  return result;
+}
+
+fn filter<A>(collection: Iterable<A>, predicate: Fn(A) -> Bool) -> Iterable<A>;
+fn filter(collection, predicate) {
+  var result = [];
+  for item in collection {
+    if !predicate(item) { continue; }
+    result.append(item);
+  }
+  return result;
+}
+
+// Example of untrusted user input with type checking:
+fn useUserObject(userInput: untrusted { name: ToString, age: ToString }) -> Result<String, TypeError>;
+fn useUserObject(userInput: untrusted) { // just need to specify "untrusted" and the type system will handle the rest
+  return "User " + userInput.name + " is " + userInput.age + " years old.";
+}
+// gets implicitly converted to something like:
+fn useUserObject(userInput: ?) -> Result<String, TypeError> {
+  type ExpectedType = { name: ToString, age: ToString };
+  if !(userInput is ExpectedType) {
+    return Err(TypeError("Expected type " + ExpectedType::toString() + ", got " + type(userInput)::toString()));
+  }
+  return Ok("User " + userInput.name + " is " + userInput.age + " years old.");
+}
+// without "untrusted", it would throw a compile-time error instead of a run-time error when passing untrusted input, e.g. from JSON.parse().
+// This way, you can do something like:
+
+fn handleRequest(request) {
+  var userData = JSON.parse(request.body); // type of userData is untrusted
+  var result = useUserObject(userData);
+  match result {
+    Ok(message) => sendResponse(200, message);
+    Err(error) => sendResponse(400, error::toString());
+  }
+}
+
+// Custom types and traits:
+trait ToString {
+  fn toString(self) -> String;
+}
+
+// Type aliases are just shorthands for complex types. They don't create new types, so they can be used interchangeably with the original type.
+alias UserAlias = { name: String, age: Int };
+
+impl ToString for UserAlias {
+  fn toString(self) {
+    return self.name + " (" + self.age::toString() + " years old)";
+  }
+}
+
+// so now anything that extends { name: String, age: Int } implements ToString:
+fn printUserInfo() {
+  var user = {
+    name: "Alice",
+    age: 30,
+    email: "test@example.com", // also trailing comma is allowed
+  };
+  print(user); // implicitly calls user::toString() because of the ToString trait
+}
+
+// If there are multiple traits that could apply, the most specific one is chosen. For example:
+alias UserNameOnly = { name: String };
+
+impl ToString for UserNameOnly {
+  fn toString(self) {
+    return self.name;
+  }
+}
+
+fn printUserInfo2() {
+  var user = {
+    name: "Bob",
+    age: 25,
+  };
+  print(user); // calls the ToString implementation for { name: String, age: Int } instead of the one for { name: String }, because it's more specific
+  // if you want to specify which one to use, you can do something like:
+  print(UserNameOnly.toString(user)); // explicitly call the ToString implementation for UserNameOnly
+  // or
+  print({ name: String }.toString(user)); // explicitly specify the type to use for the ToString implementation
+}
+
+// Use the `type` to explicitly create a new type that is distinct from the original type, even if they have the same structure. This is useful for cases where you want to enforce stricter type checking and prevent accidental misuse of similar types.
+type UserID = String; // UserID is now a distinct type from String, even though it has the same structure. You can't use a String where a UserID is expected without an explicit conversion, and vice versa.
+fn getUserByID(id: UserID) -> UserAlias {
+  // implementation to get user by ID
+}
+
+fn testGetUserByID() {
+  var id = "12345"; // type of id is String, not UserID
+  // getUserByID(id); // this would be a compile-time error because id is not of type UserID
+  var userID = UserID(id); // explicitly convert String to UserID
+  var user = getUserByID(userID); // now this works because userID is of type UserID
+}
+
+// types can be pretty complex. e.g.
+type Ok<T> = T;
+type Err<E> = E;
+alias Result<T, E> = Ok<T> | Err<E>; // must be alias and not type, because we want Result to be interchangeable with Ok and Err. if it were type, then you'd have to do Result(Ok(42)) or Result(Err("error")) instead of just Ok(42) or Err("error")
+
+fn testResult() {
+  // without explicit type annotations, the type of result would be inferred as Ok<Int>, which would prevent being able to match on Err cases.
+  var result: Result<Int, String> = Ok(42);
+  match result {
+    Ok(value) => print("Got value: " + value::toString());
+    Err(error) => print("Got error: " + error);
+  }
+}
+
+type None; // types with no parameters are just unit types that can only have one value, which is None in this case.
+type Some<T> = T;
+alias Option<T> = None | Some<T>;
+
+fn testOption() {
+  // same here for Option. Without the explicit type annotation, the type of value would be inferred as Some<Int>, which would prevent being able to match on None cases.
+  var value: Option<Int> = Some(42);
+  match value {
+    Some(v) => print("Got value: " + v::toString());
+    None => print("Got nothing");
+  }
+}
+
+type User = { name: String, age: Int };
+
+fn testUser() {
+  var user = User { name: "Charlie", age: 28 }; // using the type to create a new user object. Without `User`, this would just be an anonymous object and wouldn't have the type information attached to it.
+  print(user); // implicitly calls user::toString() because of the ToString trait implemented for { name: String, age: Int }, which User extends
+}
+
+type LinkedList<T> = None | { value: T, next: LinkedList<T> };
+
+impl ToString for LinkedList<ToString> {
+  fn toString(self) {
+    match self {
+      None => return "";
+      { value, next } => return value::toString() + (match next {
+        None => "";
+        _ => " -> " + next::toString();
+      });
+    }
+  }
+}
+
+fn testLinkedList() {
+  var list = LinkedList {
+    value: 1,
+    next: LinkedList {
+      value: 2,
+      next: LinkedList {
+        value: 3,
+        next: None,
+      },
+    },
+  };
+  print(list); // implicitly calls list::toString() because of the ToString trait implemented for LinkedList<ToString>
+}
