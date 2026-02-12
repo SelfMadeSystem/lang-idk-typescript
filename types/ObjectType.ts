@@ -12,25 +12,44 @@ export class ObjectType extends AbstractType {
       // { a: A } is wider than { a: A, b: B }
       // { a: A, b: B } is narrower than { a: A }
       // { a: A } vs { a: B } give same as A vs B
-      const thisProps = this.properties;
-      const otherProps = other.properties;
-      const thisKeys = Object.keys(thisProps);
-      const otherKeys = Object.keys(otherProps);
-      const thisWider = thisKeys.every(
-        (key) =>
-          key in otherProps && thisProps[key]!.isAssignableTo(otherProps[key]!),
-      );
-      const thisNarrower = otherKeys.every(
-        (key) =>
-          key in thisProps && otherProps[key]!.isAssignableTo(thisProps[key]!),
-      );
-      if (thisNarrower && !thisWider) return { type: "narrower" };
-      if (!thisNarrower && thisWider) return { type: "wider" };
-      if (thisNarrower && thisWider) return { type: "equal" };
-      return {
-        type: "incompatible",
-        reason: "Object types have incompatible properties",
-      };
+      const thisKeys = Object.keys(this.properties);
+      const otherKeys = Object.keys(other.properties);
+      const allKeys = new Set([...thisKeys, ...otherKeys]);
+      let hasWider = false;
+      let hasNarrower = false;
+      for (const key of allKeys) {
+        const thisProp = this.properties[key];
+        const otherProp = other.properties[key];
+        if (thisProp && otherProp) {
+          const comp = thisProp.compareTo(otherProp);
+          if (comp.type === "incompatible") {
+            return {
+              type: "incompatible",
+              reason: `Property '${key}' is incompatible: ${comp.reason}`,
+            };
+          } else if (comp.type === "wider") {
+            hasWider = true;
+          } else if (comp.type === "narrower") {
+            hasNarrower = true;
+          }
+        } else if (thisProp && !otherProp) {
+          hasNarrower = true;
+        } else if (!thisProp && otherProp) {
+          hasWider = true;
+        }
+      }
+      if (!hasWider && !hasNarrower) {
+        return { type: "equal" };
+      } else if (hasWider && !hasNarrower) {
+        return { type: "wider" };
+      } else if (!hasWider && hasNarrower) {
+        return { type: "narrower" };
+      } else {
+        return {
+          type: "incompatible",
+          reason: "ObjectTypes have mixed wider and narrower properties",
+        };
+      }
     }
     return {
       type: "incompatible",

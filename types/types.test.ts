@@ -2,6 +2,7 @@ import { test, expect } from "bun:test";
 import { UnionType } from "./UnionType";
 import { ObjectType } from "./ObjectType";
 import { IntType, StringType } from "./Primitives";
+import { NeverType } from "./AbstractType";
 
 test("IntType is equal to IntType", () => {
   const intType1 = new IntType();
@@ -106,4 +107,94 @@ test("UnionType create simplifies nested unions and removes duplicates and never
   ]);
   const simplifiedUnion = UnionType.create([new IntType(), new StringType()]);
   expect(unionType.compareTo(simplifiedUnion)).toMatchObject({ type: "equal" });
+});
+
+test("UnionType with no members is never", () => {
+  const unionType = UnionType.create([]);
+  const neverType = new NeverType();
+  expect(unionType.compareTo(neverType)).toMatchObject({ type: "equal" });
+});
+
+test("UnionType with one member simplifies to that member", () => {
+  const unionType = UnionType.create([new IntType(), new IntType()]);
+  const intType = new IntType();
+  expect(unionType.compareTo(intType)).toMatchObject({ type: "equal" });
+});
+
+test("UnionType with nested unions compares correctly", () => {
+  const unionType1 = UnionType.create([new IntType(), new ObjectType({ a: new IntType() })]);
+  const unionType2 = UnionType.create([new StringType(), new ObjectType({ a: new StringType() })]);
+  const mixedUnionType = UnionType.create([unionType1, unionType2]);
+  expect(mixedUnionType.compareTo(unionType1).type).toBe("wider");
+});
+
+test("ObjectType with nested ObjectTypes is equal when identical", () => {
+  const objType1 = new ObjectType({
+    a: new ObjectType({ b: new IntType(), c: new StringType() }),
+  });
+  const objType2 = new ObjectType({
+    a: new ObjectType({ b: new IntType(), c: new StringType() }),
+  });
+  expect(objType1.compareTo(objType2)).toMatchObject({ type: "equal" });
+});
+
+test("ObjectType with nested ObjectTypes is incompatible when properties differ", () => {
+  const objType1 = new ObjectType({
+    a: new ObjectType({ b: new IntType(), c: new StringType() }),
+  });
+  const objType2 = new ObjectType({
+    a: new ObjectType({ b: new StringType(), c: new IntType() }),
+  });
+  expect(objType1.compareTo(objType2).type).toBe("incompatible");
+});
+
+test("UnionType with nested ObjectTypes simplifies correctly", () => {
+  const unionType = UnionType.create([
+    new ObjectType({ a: new IntType() }),
+    new ObjectType({ a: new IntType() }),
+  ]);
+  const simplifiedUnion = UnionType.create([new ObjectType({ a: new IntType() })]);
+  expect(unionType.compareTo(simplifiedUnion)).toMatchObject({ type: "equal" });
+});
+
+test("UnionType with NeverType simplifies to other members", () => {
+  const unionType = UnionType.create([new IntType(), new NeverType()]);
+  const intType = new IntType();
+  expect(unionType.compareTo(intType)).toMatchObject({ type: "equal" });
+});
+
+test("UnionType with duplicate members simplifies correctly", () => {
+  const unionType = UnionType.create([new IntType(), new IntType(), new StringType()]);
+  const simplifiedUnion = UnionType.create([new IntType(), new StringType()]);
+  expect(unionType.compareTo(simplifiedUnion)).toMatchObject({ type: "equal" });
+});
+
+test("ObjectType with additional nested properties is narrower", () => {
+  const objType1 = new ObjectType({
+    a: new ObjectType({ b: new IntType() }),
+  });
+  const objType2 = new ObjectType({
+    a: new ObjectType({ b: new IntType(), c: new StringType() }),
+  });
+  expect(objType2.compareTo(objType1)).toMatchObject({ type: "narrower" });
+});
+
+test("ObjectType with missing nested properties is wider", () => {
+  const objType1 = new ObjectType({
+    a: new ObjectType({ b: new IntType(), c: new StringType() }),
+  });
+  const objType2 = new ObjectType({
+    a: new ObjectType({ b: new IntType() }),
+  });
+  expect(objType2.compareTo(objType1)).toMatchObject({ type: "wider" });
+});
+
+test("ObjectType with nested UnionType compares correctly", () => {
+  const objType1 = new ObjectType({
+    a: UnionType.create([new IntType(), new StringType()]),
+  });
+  const objType2 = new ObjectType({
+    a: new IntType(),
+  });
+  expect(objType1.compareTo(objType2)).toMatchObject({ type: "wider" });
 });
