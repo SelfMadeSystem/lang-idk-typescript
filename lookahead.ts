@@ -6,7 +6,7 @@ import {
   sequence,
   nextWord,
   map,
-} from "./parser";
+} from "./parser/parserLib";
 
 // Define a parser that ensures the next word starts with "a"
 const startsWithA = lookahead(char("a"));

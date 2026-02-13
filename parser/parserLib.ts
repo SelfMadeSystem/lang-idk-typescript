@@ -343,18 +343,18 @@ export const many =
  * Transforms the result of a parser using a mapping function.
  */
 export const map =
-  <U, P extends GParser>(
+  <U, P extends GParser, S>(
     parser: P,
-    fn: (value: GetT<P>) => U,
+    fn: (value: GetT<P>, start: InputState<S>, end: InputState<S>) => U,
   ): Parser<U, GetS<P>> =>
-  <S>(input: InputState<S>): ParserResult<U, S> => {
+  (input: InputState<S>): ParserResult<U, GetS<P>> => {
     const result = parser(input);
     if (!result.success) {
       return result;
     }
     return {
       success: true,
-      value: fn(result.value),
+      value: fn(result.value, input, result.remaining),
       remaining: result.remaining,
     };
   };

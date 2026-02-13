@@ -12,7 +12,7 @@ import {
   choice,
   many,
   eof,
-} from "./parser";
+} from "./parser/parserLib";
 
 /**
  * Example: Variable Declaration and Usage Parser

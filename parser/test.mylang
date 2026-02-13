@@ -1,0 +1,4 @@
+type LinkedList<T> {
+  value: T;
+  next: LinkedList<T> | null;
+};

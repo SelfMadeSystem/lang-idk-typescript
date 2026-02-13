@@ -26,7 +26,7 @@ import {
   number,
   exponentNumber,
   anyNumber,
-} from "./parser";
+} from "./parser/parserLib";
 
 test("createInputState creates initial state correctly", () => {
   const state = createInputState("hello");

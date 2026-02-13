@@ -9,7 +9,7 @@ import {
   many,
   skipWhitespace,
   anyNumber,
-} from "./parser";
+} from "./parser/parserLib";
 
 type Expression =
   | { type: "Number"; value: number }
