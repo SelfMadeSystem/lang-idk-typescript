@@ -5,6 +5,7 @@ import { IntType, StringType } from "./Primitives";
 import { AbstractType, NeverType } from "./AbstractType";
 import { GenericParameter, GenericType } from "./GenericType";
 import { NamedType } from "./NamedType";
+import { AliasType } from "./AliasType";
 
 function wider(a: AbstractType, b: AbstractType) {
   expect(a.compareTo(b)).toMatchObject({ type: "wider" });
@@ -522,5 +523,28 @@ describe("NamedType", () => {
       new GenericType([genericParam2], new ObjectType({ a: genericParam2 })),
     );
     incompatible(namedType1, namedType2);
+  });
+});
+
+describe("AliasType", () => {
+  // Create types out here because AliasType.create will throw if we try to create the same alias name with a different type, and we want to test that behavior as well.
+  const intType = new IntType();
+  const stringType = new StringType();
+  const alias1 = AliasType.define("Alias1", intType);
+  const alias2 = AliasType.define("Alias1", intType);
+  const alias3 = AliasType.define("Alias2", stringType);
+
+  test("AliasType with same name and same underlying type is equal", () => {
+    equal(alias1, alias2);
+  });
+
+  test("AliasType with same name but different underlying type throws error on creation", () => {
+    expect(() => AliasType.define("Alias1", stringType)).toThrow(
+      'Alias name "Alias1" is already used for a different type',
+    );
+  });
+
+  test("AliasType with different name and different underlying type is incompatible", () => {
+    incompatible(alias1, alias3);
   });
 });

@@ -56,9 +56,9 @@ export abstract class AbstractType {
   }
 
   /**
-   * Gets an underlying type if this is a wrapper type like a reference type.
+   * Gets the underlying shallow type. Only used for alias types, which should be transparent in comparisons.
    */
-  getUnderlyingType(): AbstractType {
+  getShallowType(): AbstractType {
     return this;
   }
 
@@ -66,7 +66,7 @@ export abstract class AbstractType {
    * Compares this type to another type, using caching to avoid infinite recursion.
    */
   compareTo(other: AbstractType): CompareResult {
-    other = other.getUnderlyingType();
+    other = other.getShallowType();
     this.compareList.push(other);
     const result = this.compareToImpl(other);
     this.cache.set(other, result); // should prevent infinite recursion
