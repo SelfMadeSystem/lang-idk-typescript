@@ -48,6 +48,24 @@ export class GenericType extends AbstractType {
       other.resetCompareIndices();
 
       if (!this.type && !other.type) {
+        // Compare parameters pairwise
+        if (this.params.length !== other.params.length) {
+          return {
+            type: "incompatible",
+            reason: "Generic types have different numbers of parameters",
+          };
+        }
+
+        for (let i = 0; i < this.params.length; i++) {
+          const paramResult = this.params[i]!.compareTo(other.params[i]!);
+          if (paramResult.type !== "equal") {
+            return {
+              type: "incompatible",
+              reason: `Generic parameter ${this.params[i]!.name} is not compatible with ${other.params[i]!.name}`,
+            };
+          }
+        }
+
         return { type: "equal" };
       }
 

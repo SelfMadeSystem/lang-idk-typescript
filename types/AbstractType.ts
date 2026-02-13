@@ -1,5 +1,3 @@
-import { UnionType } from "./UnionType";
-
 export type CompareResult =
   | {
       type: "equal";
@@ -57,7 +55,18 @@ export abstract class AbstractType {
     return null;
   }
 
+  /**
+   * Gets an underlying type if this is a wrapper type like a reference type.
+   */
+  getUnderlyingType(): AbstractType {
+    return this;
+  }
+
+  /**
+   * Compares this type to another type, using caching to avoid infinite recursion.
+   */
   compareTo(other: AbstractType): CompareResult {
+    other = other.getUnderlyingType();
     this.compareList.push(other);
     const result = this.compareToImpl(other);
     this.cache.set(other, result); // should prevent infinite recursion

@@ -4,6 +4,7 @@ import { ObjectType } from "./ObjectType";
 import { IntType, StringType } from "./Primitives";
 import { AbstractType, NeverType } from "./AbstractType";
 import { GenericParameter, GenericType } from "./GenericType";
+import { NamedType } from "./NamedType";
 
 function wider(a: AbstractType, b: AbstractType) {
   expect(a.compareTo(b)).toMatchObject({ type: "wider" });
@@ -277,7 +278,7 @@ describe("GenericType", () => {
     equal(genericType1, genericType2);
   });
 
-  test("GenericType with multiple same constraints is equal", () => {
+  test("GenericType with multiple same constraints without structure is incompatible", () => {
     const genericType1 = new GenericType([
       new GenericParameter("A", new IntType()),
       new GenericParameter("B", new StringType()),
@@ -286,6 +287,19 @@ describe("GenericType", () => {
       new GenericParameter("C", new StringType()),
       new GenericParameter("D", new IntType()),
     ]);
+    incompatible(genericType1, genericType2);
+  });
+
+  test("GenericType with multiple same constraints and same structure is equal", () => {
+    const a = new GenericParameter("A", new IntType());
+    const b = new GenericParameter("B", new StringType());
+    const genericType1 = new GenericType([a, b], new ObjectType({ a, b }));
+    const c = new GenericParameter("C", new IntType());
+    const d = new GenericParameter("D", new StringType());
+    const genericType2 = new GenericType(
+      [d, c],
+      new ObjectType({ a: c, b: d }),
+    );
     equal(genericType1, genericType2);
   });
 
@@ -442,14 +456,71 @@ describe("Recursive Generics", () => {
       "D",
       UnionType.create([new ObjectType({ a: c }), new StringType()]),
     );
-    c.constraint = UnionType.create([
-      new ObjectType({ b: d }),
-      new IntType(),
-    ]);
+    c.constraint = UnionType.create([new ObjectType({ b: d }), new IntType()]);
     const genericType2 = new GenericType(
       [c, d],
       new ObjectType({ a: c, b: d }),
     );
     equal(genericType1, genericType2);
+  });
+});
+
+describe("NamedType", () => {
+  test("NamedType with same name and underlying type is equal", () => {
+    const namedType1 = new NamedType("MyType", new IntType());
+    const namedType2 = new NamedType("MyType", new IntType());
+    equal(namedType1, namedType2);
+  });
+
+  test("NamedType with different names is incompatible", () => {
+    const namedType1 = new NamedType("MyType1", new IntType());
+    const namedType2 = new NamedType("MyType2", new IntType());
+    incompatible(namedType1, namedType2);
+  });
+
+  test("NamedType with same name but different underlying type is incompatible", () => {
+    const namedType1 = new NamedType("MyType", new IntType());
+    const namedType2 = new NamedType("MyType", new StringType());
+    incompatible(namedType1, namedType2);
+  });
+
+  test("NamedTypes with same name and wider underlying type is wider", () => {
+    const namedType1 = new NamedType(
+      "MyType",
+      new ObjectType({ a: new IntType() }),
+    );
+    const namedType2 = new NamedType(
+      "MyType",
+      new ObjectType({ a: new IntType(), b: new StringType() }),
+    );
+    wider(namedType1, namedType2);
+  });
+
+  test("NamedTypes with same name and same generics is equal", () => {
+    const genericParam1 = new GenericParameter("T");
+    const genericParam2 = new GenericParameter("U");
+    const namedType1 = new NamedType(
+      "MyType",
+      new GenericType([genericParam1], new ObjectType({ a: genericParam1 })),
+    );
+    const namedType2 = new NamedType(
+      "MyType",
+      new GenericType([genericParam2], new ObjectType({ a: genericParam2 })),
+    );
+    equal(namedType1, namedType2);
+  });
+
+  test("NamedTypes with same name and different generics is incompatible", () => {
+    const genericParam1 = new GenericParameter("T", new IntType());
+    const genericParam2 = new GenericParameter("U", new StringType());
+    const namedType1 = new NamedType(
+      "MyType",
+      new GenericType([genericParam1], new ObjectType({ a: genericParam1 })),
+    );
+    const namedType2 = new NamedType(
+      "MyType",
+      new GenericType([genericParam2], new ObjectType({ a: genericParam2 })),
+    );
+    incompatible(namedType1, namedType2);
   });
 });
