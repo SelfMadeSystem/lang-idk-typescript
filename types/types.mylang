@@ -1,0 +1,31 @@
+// test types in my language.
+// right now, the language only has types, no actual logic.
+// special "incompatible", "equal", "wider", and "narrower" assertions are
+// supported for testing type comparisons.
+
+// this creates a type alias
+type MyAlias = string;
+
+// this creates a named type
+type MyNamedType string;
+
+incompatible(MyAlias, MyNamedType);
+
+equal({
+  a: string,
+  b: number,
+}, {
+  a: string,
+  b: number,
+});
+
+type List<T>;
+
+incompatible(List<string>, List<number>);
+equal(List<string>, List<string>);
+equal(<A>List<A>, List);
+
+type LinkedList<T>{
+  value: T;
+  next: LinkedList<T> | null;
+};

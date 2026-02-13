@@ -19,10 +19,12 @@ function narrower(a: AbstractType, b: AbstractType) {
 
 function equal(a: AbstractType, b: AbstractType) {
   expect(a.compareTo(b)).toMatchObject({ type: "equal" });
+  expect(b.compareTo(a)).toMatchObject({ type: "equal" });
 }
 
 function incompatible(a: AbstractType, b: AbstractType) {
   expect(a.compareTo(b).type).toBe("incompatible");
+  expect(b.compareTo(a).type).toBe("incompatible");
 }
 
 describe("Primitives", () => {
