@@ -1,7 +1,7 @@
 import { AbstractType, type CompareResult } from "./AbstractType";
 
 export class IntType extends AbstractType {
-  override compareTo(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType): CompareResult {
     const trivial = this.trivialCompare(other);
     if (trivial) return trivial;
     if (other instanceof IntType) {
@@ -19,7 +19,7 @@ export class IntType extends AbstractType {
 }
 
 export class StringType extends AbstractType {
-  override compareTo(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType): CompareResult {
     const trivial = this.trivialCompare(other);
     if (trivial) return trivial;
     if (other instanceof StringType) {

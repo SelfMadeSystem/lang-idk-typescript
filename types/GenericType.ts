@@ -12,19 +12,12 @@ export class GenericType extends AbstractType {
   }
 
   resetCompareIndices() {
-    this.params.forEach(
-      (param) => ((param.compareIndex = -1), (param.comparing = true)),
-    );
+    this.params.forEach((param) => param.comparisons.clear());
   }
 
   startComparing() {
     this.params.forEach(
-      (param, i) => (
-        (param.compareIndex = -1),
-        (param.thisIndex = i),
-        (param.comparing = true),
-        (param.compareResult = null)
-      ),
+      (param, i) => (param.comparisons.clear(), (param.thisIndex = i)),
     );
   }
 
@@ -32,7 +25,7 @@ export class GenericType extends AbstractType {
     return this.params.findIndex((p) => p === param);
   }
 
-  override compareTo(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType): CompareResult {
     const trivial = this.trivialCompare(other);
     if (trivial) {
       return trivial;
@@ -41,30 +34,6 @@ export class GenericType extends AbstractType {
     if (other instanceof GenericType) {
       this.startComparing();
       other.startComparing();
-
-      for (let i = 0; i < this.params.length; i++) {
-        const paramA = this.params[i]!;
-
-        if (paramA.constraint === null) {
-          continue;
-        }
-
-        const indexB = other.params.findIndex(
-          (param) =>
-            param.compareIndex === -1 &&
-            param.constraint &&
-            param.constraint.equals(paramA.constraint!),
-        );
-        if (indexB === -1) {
-          continue;
-        }
-
-        const paramB = other.params[indexB]!;
-        paramA.compareIndex = i;
-        paramB.compareIndex = indexB;
-        paramA.compareResult = { type: "equal" };
-        paramB.compareResult = { type: "equal" };
-      }
 
       if (this.type && other.type) {
         const result = this.type.compareTo(other.type);
@@ -88,10 +57,30 @@ export class GenericType extends AbstractType {
       };
     }
 
+    this.startComparing();
+
+    if (this.type) {
+      const result = this.type.compareTo(other);
+
+      this.resetCompareIndices();
+
+      return result;
+    }
+
+    this.resetCompareIndices();
+
+    // if (!this.type && !other.type) {
+    //   return { type: "equal" };
+    // }
+
     return {
       type: "incompatible",
-      reason: "Cannot compare generic type to non-generic type",
+      reason: "One generic type has a base type while the other does not",
     };
+  }
+
+  override isGeneric(): boolean {
+    return true;
   }
 
   override toString(): string {
@@ -103,9 +92,7 @@ export class GenericType extends AbstractType {
 export class GenericParameter extends AbstractType {
   public parent: GenericType = null as any;
   public thisIndex: number = -1;
-  public compareIndex: number = -1;
-  public comparing: boolean = false;
-  public compareResult: CompareResult | null = null;
+  public comparisons: Map<number, CompareResult> = new Map();
 
   constructor(
     public name: string,
@@ -114,7 +101,7 @@ export class GenericParameter extends AbstractType {
     super();
   }
 
-  override compareTo(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType): CompareResult {
     const trivial = this.trivialCompare(other);
     if (trivial) {
       return trivial;
@@ -129,9 +116,41 @@ export class GenericParameter extends AbstractType {
         };
       }
 
-      if (this.compareIndex !== -1 && this.compareIndex === other.thisIndex) {
-        return this.compareResult || { type: "equal" };
+      const thisIndex = this.thisIndex;
+      const otherIndex = other.thisIndex;
+
+      const comparison = this.comparisons.get(otherIndex);
+      if (comparison) {
+        return comparison;
       }
+
+      const thisConstraint = this.constraint;
+      const otherConstraint = other.constraint;
+
+      let result: CompareResult;
+
+      if (thisConstraint && otherConstraint) {
+        result = thisConstraint.compareTo(otherConstraint);
+      } else if (!thisConstraint && !otherConstraint) {
+        result = { type: "equal" };
+      } else if (thisConstraint && !otherConstraint) {
+        result = { type: "narrower" };
+      } else {
+        result = { type: "wider" };
+      }
+
+      this.comparisons.set(otherIndex, result);
+      other.comparisons.set(thisIndex, result);
+
+      if (this.comparisons.size > 1) {
+        // we already compared this parameter to another parameter, so we know this generic type must be narrower
+        return { type: "narrower" };
+      }
+      if (other.comparisons.size > 1) {
+        // we already compared this parameter to another parameter, so we know this generic type must be wider
+        return { type: "wider" };
+      }
+      return result;
     }
 
     if (this.constraint) {

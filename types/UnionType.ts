@@ -28,7 +28,7 @@ export class UnionType extends AbstractType {
     return new UnionType(unique);
   }
 
-  override compareTo(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType): CompareResult {
     // don't trivial compare because it will cause infinite recursion with unions
     if (this === other) {
       return { type: "equal" };
@@ -73,10 +73,6 @@ export class UnionType extends AbstractType {
       type: "incompatible",
       reason: "Union type is not assignable to the other type",
     };
-  }
-
-  override compareAgainst(other: AbstractType): CompareResult {
-    return invertCompareResult(this.compareTo(other));
   }
 
   override isUnion(): boolean {

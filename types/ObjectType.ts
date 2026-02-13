@@ -1,14 +1,25 @@
 import { AbstractType, type CompareResult } from "./AbstractType";
 
 export class ObjectType extends AbstractType {
+  private toStringing = false;
+
   constructor(public properties: Record<string, AbstractType>) {
     super();
   }
 
-  override compareTo(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType): CompareResult {
     const trivial = this.trivialCompare(other);
     if (trivial) return trivial;
     if (other instanceof ObjectType) {
+      if (this.compareList.slice(0, -1).includes(other)) {
+        return { type: "equal" }; // prevent infinite recursion in circular types, assume equal but cache incompatible to prevent future comparisons from also assuming equal
+      }
+      if (this.compareList.length > 1) {
+        this.cache.set(other, {
+          type: "incompatible",
+          reason: "Recursive comparison detected",
+        });
+      }
       // { a: A } is wider than { a: A, b: B }
       // { a: A, b: B } is narrower than { a: A }
       // { a: A } vs { a: B } give same as A vs B
@@ -58,9 +69,14 @@ export class ObjectType extends AbstractType {
   }
 
   override toString(): string {
+    if (this.toStringing) {
+      return "{ ... }"; // prevent infinite recursion in toString
+    }
+    this.toStringing = true;
     const props = Object.entries(this.properties)
       .map(([key, type]) => `${key}: ${type.toString()}`)
       .join(", ");
+    this.toStringing = false;
     return `{ ${props} }`;
   }
 }

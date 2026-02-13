@@ -29,6 +29,9 @@ export function invertCompareResult(result: CompareResult): CompareResult {
 }
 
 export abstract class AbstractType {
+  protected cache = new Map<AbstractType, CompareResult>();
+  protected compareList: AbstractType[] = [];
+
   /**
    * Used in compareTo implementations to handle trivial cases like identity and never types.
    */
@@ -36,7 +39,13 @@ export abstract class AbstractType {
     if (this === other) {
       return { type: "equal" };
     }
-    if (other.isUnion()) {
+    if (this.cache.has(other)) {
+      return this.cache.get(other)!;
+    }
+    if (!this.isUnion() && other.isUnion()) {
+      return other.compareAgainst(this);
+    }
+    if (!this.isGeneric() && other.isGeneric()) {
       return other.compareAgainst(this);
     }
     if (other.isNever()) {
@@ -46,6 +55,14 @@ export abstract class AbstractType {
       return { type: "narrower" };
     }
     return null;
+  }
+
+  compareTo(other: AbstractType): CompareResult {
+    this.compareList.push(other);
+    const result = this.compareToImpl(other);
+    this.cache.set(other, result); // should prevent infinite recursion
+    this.compareList.pop();
+    return result;
   }
 
   /**
@@ -62,10 +79,10 @@ export abstract class AbstractType {
    * @param other The other type to compare against.
    * @returns A CompareResult indicating the relationship.
    */
-  abstract compareTo(other: AbstractType): CompareResult;
+  protected abstract compareToImpl(other: AbstractType): CompareResult;
 
   compareAgainst(other: AbstractType): CompareResult {
-    return other.compareTo(this);
+    return invertCompareResult(this.compareTo(other));
   }
 
   isAssignableTo(other: AbstractType): boolean {
@@ -86,11 +103,15 @@ export abstract class AbstractType {
     return false;
   }
 
+  isGeneric(): boolean {
+    return false;
+  }
+
   abstract toString(): string;
 }
 
 export class NeverType extends AbstractType {
-  override compareTo(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType): CompareResult {
     if (other instanceof NeverType) {
       return { type: "equal" };
     }
