@@ -1,3 +1,4 @@
+import type { Environment } from "../runtime/Environment";
 import { AbstractType, type CompareResult } from "./AbstractType";
 import { AppliedGenerics } from "./AppliedGenerics";
 
@@ -10,6 +11,12 @@ export class GenericType extends AbstractType {
     params.forEach(
       (param, i) => ((param.parent = this), (param.thisIndex = i)),
     );
+  }
+
+  pushParameter(param: GenericParameter) {
+    param.parent = this;
+    param.thisIndex = this.params.length;
+    this.params.push(param);
   }
 
   resetCompareIndices() {
@@ -26,7 +33,7 @@ export class GenericType extends AbstractType {
     return this.params.findIndex((p) => p === param);
   }
 
-  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
     const populateResult = args.populateFromGeneric(this);
     if (populateResult instanceof Error) {
       return populateResult;
@@ -44,7 +51,7 @@ export class GenericType extends AbstractType {
         const param = newGeneric.params[i]!;
         const originalParam = this.params[i]!;
         const newConstraint =
-          originalParam.constraint?.applyTypeArguments(newApplied);
+          originalParam.constraint?.applyTypeArguments(newApplied, env);
         if (newConstraint instanceof Error) {
           return new Error(
             `Failed to apply type arguments to constraint of generic parameter ${param.name}: ${newConstraint.message}`,
@@ -52,7 +59,7 @@ export class GenericType extends AbstractType {
         }
         param.constraint = newConstraint || null;
         const newDefault =
-          originalParam.defaultType?.applyTypeArguments(newApplied);
+          originalParam.defaultType?.applyTypeArguments(newApplied, env);
         if (newDefault instanceof Error) {
           return new Error(
             `Failed to apply type arguments to default type of generic parameter ${param.name}: ${newDefault.message}`,
@@ -66,7 +73,7 @@ export class GenericType extends AbstractType {
         new Map(newGeneric.params.map((p) => [p.name, p])),
       );
     }
-    const r = this.type.applyTypeArguments(args);
+    const r = this.type.applyTypeArguments(args, env);
     if (r instanceof Error) {
       return new Error(
         `Failed to apply type arguments to generic type: ${r.message}`,
@@ -75,8 +82,8 @@ export class GenericType extends AbstractType {
     return r;
   }
 
-  override compareToImpl(other: AbstractType): CompareResult {
-    const trivial = this.trivialCompare(other);
+  override compareToImpl(other: AbstractType, env: Environment): CompareResult {
+    const trivial = this.trivialCompare(other, env);
     if (trivial) {
       return trivial;
     }
@@ -86,7 +93,7 @@ export class GenericType extends AbstractType {
       other.startComparing();
 
       if (this.type && other.type) {
-        const result = this.type.compareTo(other.type);
+        const result = this.type.compareTo(other.type, env);
 
         this.resetCompareIndices();
         other.resetCompareIndices();
@@ -107,7 +114,7 @@ export class GenericType extends AbstractType {
         }
 
         for (let i = 0; i < this.params.length; i++) {
-          const paramResult = this.params[i]!.compareTo(other.params[i]!);
+          const paramResult = this.params[i]!.compareTo(other.params[i]!, env);
           if (paramResult.type !== "equal") {
             return {
               type: "incompatible",
@@ -128,7 +135,7 @@ export class GenericType extends AbstractType {
     this.startComparing();
 
     if (this.type) {
-      const result = this.type.compareTo(other);
+      const result = this.type.compareTo(other, env);
 
       this.resetCompareIndices();
 
@@ -170,12 +177,12 @@ export class GenericParameter extends AbstractType {
     super();
   }
 
-  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
     if (args.argsByName.has(this.parent)) {
       const arg = args.argsByName.get(this.parent)!.get(this.name);
       if (arg) {
         if (this.constraint) {
-          const constraintResult = arg.compareTo(this.constraint);
+          const constraintResult = arg.compareTo(this.constraint, env);
           if (
             constraintResult.type === "incompatible" ||
             constraintResult.type === "wider"
@@ -189,13 +196,13 @@ export class GenericParameter extends AbstractType {
       }
     }
     if (this.defaultType) {
-      return this.defaultType.applyTypeArguments(args);
+      return this.defaultType.applyTypeArguments(args, env);
     }
     return this;
   }
 
-  override compareToImpl(other: AbstractType): CompareResult {
-    const trivial = this.trivialCompare(other);
+  override compareToImpl(other: AbstractType, env: Environment): CompareResult {
+    const trivial = this.trivialCompare(other, env);
     if (trivial) {
       return trivial;
     }
@@ -223,7 +230,7 @@ export class GenericParameter extends AbstractType {
       let result: CompareResult;
 
       if (thisConstraint && otherConstraint) {
-        result = thisConstraint.compareTo(otherConstraint);
+        result = thisConstraint.compareTo(otherConstraint, env);
       } else if (!thisConstraint && !otherConstraint) {
         result = { type: "equal" };
       } else if (thisConstraint && !otherConstraint) {
@@ -247,7 +254,7 @@ export class GenericParameter extends AbstractType {
     }
 
     if (this.constraint) {
-      return this.constraint.compareTo(other);
+      return this.constraint.compareTo(other, env);
     }
 
     return { type: "narrower" };

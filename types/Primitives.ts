@@ -1,8 +1,9 @@
+import type { Environment } from "../runtime/Environment";
 import { AbstractType, type CompareResult } from "./AbstractType";
 
 export class IntType extends AbstractType {
-  override compareToImpl(other: AbstractType): CompareResult {
-    const trivial = this.trivialCompare(other);
+  override compareToImpl(other: AbstractType, env: Environment): CompareResult {
+    const trivial = this.trivialCompare(other, env);
     if (trivial) return trivial;
     if (other instanceof IntType) {
       return { type: "equal" };
@@ -19,8 +20,8 @@ export class IntType extends AbstractType {
 }
 
 export class StringType extends AbstractType {
-  override compareToImpl(other: AbstractType): CompareResult {
-    const trivial = this.trivialCompare(other);
+  override compareToImpl(other: AbstractType, env: Environment): CompareResult {
+    const trivial = this.trivialCompare(other, env);
     if (trivial) return trivial;
     if (other instanceof StringType) {
       return { type: "equal" };

@@ -1,3 +1,4 @@
+import type { Environment } from "../runtime/Environment";
 import type { AppliedGenerics } from "./AppliedGenerics";
 
 export type CompareResult =
@@ -35,7 +36,7 @@ export abstract class AbstractType {
   /**
    * Used in compareTo implementations to handle trivial cases like identity and never types.
    */
-  protected trivialCompare(other: AbstractType): CompareResult | null {
+  protected trivialCompare(other: AbstractType, env: Environment): CompareResult | null {
     if (this === other) {
       return { type: "equal" };
     }
@@ -43,10 +44,10 @@ export abstract class AbstractType {
       return this.cache.get(other)!;
     }
     if (!this.isUnion() && other.isUnion()) {
-      return other.compareAgainst(this);
+      return other.compareAgainst(this, env);
     }
     if (!this.isGeneric() && other.isGeneric()) {
-      return other.compareAgainst(this);
+      return other.compareAgainst(this, env);
     }
     if (other.isNever()) {
       return { type: "wider" };
@@ -60,7 +61,7 @@ export abstract class AbstractType {
   /**
    * Gets the underlying shallow type. Only used for alias types, which should be transparent in comparisons.
    */
-  getShallowType(): AbstractType {
+  getShallowType(env: Environment): AbstractType {
     return this;
   }
 
@@ -69,21 +70,21 @@ export abstract class AbstractType {
    *
    * Should return a new type with the arguments applied, or an error if the arguments are invalid.
    */
-  applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
-    const shallow = this.getShallowType();
+  applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
+    const shallow = this.getShallowType(env);
     if (shallow === this) {
       return this;
     }
-    return shallow.applyTypeArguments(args);
+    return shallow.applyTypeArguments(args, env);
   }
 
   /**
    * Compares this type to another type, using caching to avoid infinite recursion.
    */
-  compareTo(other: AbstractType): CompareResult {
-    other = other.getShallowType();
+  compareTo(other: AbstractType, env: Environment): CompareResult {
+    other = other.getShallowType(env);
     this.compareList.push(other);
-    const result = this.compareToImpl(other);
+    const result = this.compareToImpl(other, env);
     this.cache.set(other, result); // should prevent infinite recursion
     this.compareList.pop();
     return result;
@@ -101,21 +102,22 @@ export abstract class AbstractType {
    * `a.compareTo(b)` should yield the inverse relationship of `b.compareTo(a)`.
    *
    * @param other The other type to compare against.
+   * @param env The environment to use for looking up type definitions during comparison.
    * @returns A CompareResult indicating the relationship.
    */
-  protected abstract compareToImpl(other: AbstractType): CompareResult;
+  protected abstract compareToImpl(other: AbstractType, env: Environment): CompareResult;
 
-  compareAgainst(other: AbstractType): CompareResult {
-    return invertCompareResult(this.compareTo(other));
+  compareAgainst(other: AbstractType, env: Environment): CompareResult {
+    return invertCompareResult(this.compareTo(other, env));
   }
 
-  isAssignableTo(other: AbstractType): boolean {
-    const result = this.compareTo(other);
+  isAssignableTo(other: AbstractType, env: Environment): boolean {
+    const result = this.compareTo(other, env);
     return result.type === "equal" || result.type === "narrower";
   }
 
-  equals(other: AbstractType): boolean {
-    const result = this.compareTo(other);
+  equals(other: AbstractType, env: Environment): boolean {
+    const result = this.compareTo(other, env);
     return result.type === "equal";
   }
 

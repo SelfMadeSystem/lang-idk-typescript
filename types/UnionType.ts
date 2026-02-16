@@ -1,3 +1,4 @@
+import type { Environment } from "../runtime/Environment";
 import {
   AbstractType,
   invertCompareResult,
@@ -11,7 +12,7 @@ export class UnionType extends AbstractType {
     super();
   }
 
-  static create(types: AbstractType[]): AbstractType {
+  static create(types: AbstractType[], env: Environment): AbstractType {
     const flattened: AbstractType[] = [];
     for (const t of types) {
       if (t instanceof UnionType) {
@@ -22,17 +23,17 @@ export class UnionType extends AbstractType {
     }
     // Remove duplicates
     const unique = flattened.filter(
-      (t, index) => flattened.findIndex((ut) => ut.equals(t)) === index,
+      (t, index) => flattened.findIndex((ut) => ut.equals(t, env)) === index,
     );
     if (unique.length === 0) return new NeverType();
     if (unique.length === 1) return unique[0]!;
     return new UnionType(unique);
   }
 
-  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
     const newTypes: AbstractType[] = [];
     for (const t of this.types) {
-      const r = t.applyTypeArguments(args);
+      const r = t.applyTypeArguments(args, env);
       if (r instanceof Error) {
         return new Error(
           `Failed to apply type arguments to union type: ${r.message}`,
@@ -40,10 +41,10 @@ export class UnionType extends AbstractType {
       }
       newTypes.push(r);
     }
-    return UnionType.create(newTypes);
+    return UnionType.create(newTypes, env);
   }
 
-  override compareToImpl(other: AbstractType): CompareResult {
+  override compareToImpl(other: AbstractType, env: Environment): CompareResult {
     // don't trivial compare because it will cause infinite recursion with unions
     if (this === other) {
       return { type: "equal" };
@@ -64,10 +65,10 @@ export class UnionType extends AbstractType {
       const thisTypes = this.types;
       const otherTypes = other.types;
       const thisNarrower = thisTypes.every((t) =>
-        otherTypes.some((ot) => t.isAssignableTo(ot)),
+        otherTypes.some((ot) => t.isAssignableTo(ot, env)),
       );
       const thisWider = otherTypes.every((ot) =>
-        thisTypes.some((t) => ot.isAssignableTo(t)),
+        thisTypes.some((t) => ot.isAssignableTo(t, env)),
       );
       if (thisNarrower && !thisWider) return { type: "narrower" };
       if (!thisNarrower && thisWider) return { type: "wider" };
@@ -79,8 +80,8 @@ export class UnionType extends AbstractType {
     }
     // A | B narrower than C if A narrower than C and B narrower than C
     // A | B wider than C if A wider than C or B wider than C
-    const thisNarrower = this.types.every((t) => t.isAssignableTo(other));
-    const thisWider = this.types.some((t) => other.isAssignableTo(t));
+    const thisNarrower = this.types.every((t) => t.isAssignableTo(other, env));
+    const thisWider = this.types.some((t) => other.isAssignableTo(t, env));
     if (thisNarrower && !thisWider) return { type: "narrower" };
     if (!thisNarrower && thisWider) return { type: "wider" };
     if (thisNarrower && thisWider) return { type: "equal" };

@@ -41,7 +41,18 @@ export class AppliedGenerics {
       argsByName.set(name, arg);
     }
     this.argsByName.set(generic, argsByName);
-    const missingParams = generic.params.filter((p) => !argsByName.has(p.name) && !p.defaultType);
+    const missingParams = generic.params.filter(
+      (p) => !argsByName.has(p.name) && !p.defaultType,
+    );
+    this.populateResult.set(generic, missingParams);
     return missingParams;
+  }
+
+  toString(): string {
+    const positional = this.positionalArgs.map((a) => a.toString()).join(", ");
+    const named = Object.entries(this.namedArgs)
+      .map(([k, v]) => `${k}: ${v.toString()}`)
+      .join(", ");
+    return [positional, named].filter((s) => s).join(", ");
   }
 }

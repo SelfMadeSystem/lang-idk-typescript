@@ -3,6 +3,8 @@
 // special "incompatible", "equal", "wider", and "narrower" assertions are
 // supported for testing type comparisons.
 
+type None;
+
 // this creates a type alias
 type MyAlias = string;
 
@@ -13,19 +15,17 @@ incompatible(MyAlias, MyNamedType);
 
 equal({
   a: string,
-  b: number,
+  b: int,
 }, {
   a: string,
-  b: number,
+  b: int,
 });
 
-type List<T>;
-
-incompatible(List<string>, List<number>);
-equal(List<string>, List<string>);
-equal(<A>List<A>, List);
-
-type LinkedList<T>{
-  value: T;
-  next: LinkedList<T> | null;
+type GenericAlias = <A, B> {
+  a: A;
+  b: B;
+  ab: (A | B);
 };
+
+print(GenericAlias<B = string, A = int>);
+print(GenericAlias<string, int>);

@@ -49,13 +49,6 @@ export class Module {
   }
 }
 
-export type ParseScope = {
-  parent?: ParseScope;
-  typeDefs: Map<string, TypeDef>;
-  typeAliases: Map<string, TypeAlias>;
-  genericParams: Map<string, GenericParameter>;
-};
-
 export abstract class AbstractNode {
   public abstract readonly type: string;
 
@@ -335,27 +328,27 @@ export abstract class TypeExpression extends AbstractNode {
   static parseExpr: () => Parser<TypeExpression> = () =>
     p.recursive((parseExpr) =>
       p.choice(
-        NamedType.parse(),
-        GenericType.parse(parseExpr),
-        ObjectType.parse(parseExpr),
-        TupleType.parse(parseExpr),
-        UnionType.parse(parseExpr),
+        NamedTypeExpr.parse(),
+        GenericTypeExpr.parse(parseExpr),
+        ObjectTypeExpr.parse(parseExpr),
+        TupleTypeExpr.parse(parseExpr),
+        UnionTypeExpr.parse(parseExpr),
       ),
     ) as Parser<TypeExpression>;
 
   static parseAppliedExpr: () => Parser<TypeExpression> = () =>
     p.recursive((parseExpr) =>
       p.choice(
-        NamedType.parse(parseExpr),
-        AppliedGenericType.parse(parseExpr),
-        ObjectType.parse(parseExpr),
-        TupleType.parse(parseExpr),
-        UnionType.parse(parseExpr),
+        NamedTypeExpr.parse(parseExpr),
+        AppliedGenericExpr.parse(parseExpr),
+        ObjectTypeExpr.parse(parseExpr),
+        TupleTypeExpr.parse(parseExpr),
+        UnionTypeExpr.parse(parseExpr),
       ),
     ) as Parser<TypeExpression>;
 }
 
-export class NamedType extends TypeExpression {
+export class NamedTypeExpr extends TypeExpression {
   public readonly type = "NamedType";
 
   constructor(
@@ -374,28 +367,27 @@ export class NamedType extends TypeExpression {
     return `${this.name.name}${this.next ? `${this.next.toLangString()}` : ""}`;
   }
 
-  static parse: (parseExpr?: Parser<TypeExpression>) => Parser<NamedType> = (
-    parseExpr,
-  ) =>
-    p.map(
-      p.sequence(
-        Identifier.parse(),
-        p.skipWhitespace,
-        p.optional(parseExpr ?? TypeExpression.parseAppliedExpr()),
-      ),
-      ([name, , next], start, end) =>
-        new NamedType(
-          name,
-          {
-            start: toPlace(start),
-            end: toPlace(end),
-          },
-          next || undefined,
+  static parse: (parseExpr?: Parser<TypeExpression>) => Parser<NamedTypeExpr> =
+    (parseExpr) =>
+      p.map(
+        p.sequence(
+          Identifier.parse(),
+          p.skipWhitespace,
+          p.optional(parseExpr ?? TypeExpression.parseAppliedExpr()),
         ),
-    ) as Parser<NamedType>;
+        ([name, , next], start, end) =>
+          new NamedTypeExpr(
+            name,
+            {
+              start: toPlace(start),
+              end: toPlace(end),
+            },
+            next || undefined,
+          ),
+      ) as Parser<NamedTypeExpr>;
 }
 
-export class GenericType extends TypeExpression {
+export class GenericTypeExpr extends TypeExpression {
   public readonly type = "GenericType";
 
   constructor(
@@ -414,32 +406,31 @@ export class GenericType extends TypeExpression {
     return `<${this.args.map((arg) => arg.toLangString()).join(", ")}>${this.next ? `${this.next.toLangString()}` : ""}`;
   }
 
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<GenericType> = (
-    parseExpr,
-  ) =>
-    p.map(
-      p.sequence(
-        p.literal("<"),
-        p.skipWhitespace,
-        p.sepBy(
-          GenericParameter.parse(parseExpr),
-          p.sequence(p.skipWhitespace, p.literal(","), p.skipWhitespace),
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<GenericTypeExpr> =
+    (parseExpr) =>
+      p.map(
+        p.sequence(
+          p.literal("<"),
+          p.skipWhitespace,
+          p.sepBy(
+            GenericParameter.parse(parseExpr),
+            p.sequence(p.skipWhitespace, p.literal(","), p.skipWhitespace),
+          ),
+          p.skipWhitespace,
+          p.literal(">"),
+          p.skipWhitespace,
+          p.optional(parseExpr),
         ),
-        p.skipWhitespace,
-        p.literal(">"),
-        p.skipWhitespace,
-        p.optional(parseExpr),
-      ),
-      ([, , args, , , , next], start, end) =>
-        new GenericType(
-          args,
-          {
-            start: toPlace(start),
-            end: toPlace(end),
-          },
-          next || undefined,
-        ),
-    ) as Parser<GenericType>;
+        ([, , args, , , , next], start, end) =>
+          new GenericTypeExpr(
+            args,
+            {
+              start: toPlace(start),
+              end: toPlace(end),
+            },
+            next || undefined,
+          ),
+      ) as Parser<GenericTypeExpr>;
 }
 
 export class GenericParameter extends TypeExpression {
@@ -492,7 +483,7 @@ export class GenericParameter extends TypeExpression {
     ) as Parser<GenericParameter>;
 }
 
-export class AppliedGenericType extends TypeExpression {
+export class AppliedGenericExpr extends TypeExpression {
   public readonly type = "AppliedGenericType";
 
   constructor(
@@ -513,7 +504,7 @@ export class AppliedGenericType extends TypeExpression {
 
   static parse: (
     parseExpr: Parser<TypeExpression>,
-  ) => Parser<AppliedGenericType> = (parseExpr) =>
+  ) => Parser<AppliedGenericExpr> = (parseExpr) =>
     p.map(
       p.sequence(
         p.literal("<"),
@@ -528,7 +519,7 @@ export class AppliedGenericType extends TypeExpression {
         p.optional(parseExpr),
       ),
       ([, , args, , , , next], start, end) =>
-        new AppliedGenericType(
+        new AppliedGenericExpr(
           args,
           {
             start: toPlace(start),
@@ -536,7 +527,7 @@ export class AppliedGenericType extends TypeExpression {
           },
           next || undefined,
         ),
-    ) as Parser<AppliedGenericType>;
+    ) as Parser<AppliedGenericExpr>;
 }
 
 export class AppliedGenericArgument extends TypeExpression {
@@ -589,7 +580,7 @@ export class AppliedGenericArgument extends TypeExpression {
     ) as Parser<AppliedGenericArgument>;
 }
 
-export class ObjectType extends TypeExpression {
+export class ObjectTypeExpr extends TypeExpression {
   public readonly type = "ObjectType";
 
   constructor(
@@ -609,30 +600,29 @@ ${this.properties.map((prop) => `  ${prop.toLangString()}`).join("\n")}
 }`;
   }
 
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<ObjectType> = (
-    parseExpr,
-  ) =>
-    p.map(
-      p.sequence(
-        p.literal("{"),
-        p.skipWhitespace,
-        p.sepBy(
-          ObjectProperty.parse(parseExpr),
-          p.sequence(
-            p.skipWhitespace,
-            p.choice(p.literal(","), p.literal(";")),
-            p.skipWhitespace,
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<ObjectTypeExpr> =
+    (parseExpr) =>
+      p.map(
+        p.sequence(
+          p.literal("{"),
+          p.skipWhitespace,
+          p.sepBy(
+            ObjectProperty.parse(parseExpr),
+            p.sequence(
+              p.skipWhitespace,
+              p.choice(p.literal(","), p.literal(";")),
+              p.skipWhitespace,
+            ),
           ),
+          p.skipWhitespace,
+          p.literal("}"),
         ),
-        p.skipWhitespace,
-        p.literal("}"),
-      ),
-      ([, , properties], start, end) =>
-        new ObjectType(properties, {
-          start: toPlace(start),
-          end: toPlace(end),
-        }),
-    ) as Parser<ObjectType>;
+        ([, , properties], start, end) =>
+          new ObjectTypeExpr(properties, {
+            start: toPlace(start),
+            end: toPlace(end),
+          }),
+      ) as Parser<ObjectTypeExpr>;
 }
 
 export class ObjectProperty extends TypeExpression {
@@ -674,7 +664,7 @@ export class ObjectProperty extends TypeExpression {
       ) as Parser<ObjectProperty>;
 }
 
-export class TupleType extends TypeExpression {
+export class TupleTypeExpr extends TypeExpression {
   public readonly type = "TupleType";
 
   constructor(
@@ -692,7 +682,7 @@ export class TupleType extends TypeExpression {
     return `[${this.elements.map((el) => el.toLangString()).join(", ")}]`;
   }
 
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<TupleType> = (
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<TupleTypeExpr> = (
     parseExpr,
   ) =>
     p.map(
@@ -707,14 +697,14 @@ export class TupleType extends TypeExpression {
         p.literal("]"),
       ),
       ([, , elements], start, end) =>
-        new TupleType(elements, {
+        new TupleTypeExpr(elements, {
           start: toPlace(start),
           end: toPlace(end),
         }),
-    ) as Parser<TupleType>;
+    ) as Parser<TupleTypeExpr>;
 }
 
-export class UnionType extends TypeExpression {
+export class UnionTypeExpr extends TypeExpression {
   public readonly type = "UnionType";
 
   constructor(
@@ -732,7 +722,7 @@ export class UnionType extends TypeExpression {
     return `${this.options.map((opt) => opt.toLangString()).join(" | ")}`;
   }
 
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<UnionType> = (
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<UnionTypeExpr> = (
     parseExpr,
   ) =>
     p.map(
@@ -751,9 +741,9 @@ export class UnionType extends TypeExpression {
           ? null
           : options.length === 1
             ? options[0]
-            : new UnionType(options, {
+            : new UnionTypeExpr(options, {
                 start: toPlace(start),
                 end: toPlace(end),
               }),
-    ) as Parser<UnionType>;
+    ) as Parser<UnionTypeExpr>;
 }
