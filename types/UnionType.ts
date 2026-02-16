@@ -4,6 +4,7 @@ import {
   NeverType,
   type CompareResult,
 } from "./AbstractType";
+import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class UnionType extends AbstractType {
   private constructor(public types: AbstractType[]) {
@@ -26,6 +27,20 @@ export class UnionType extends AbstractType {
     if (unique.length === 0) return new NeverType();
     if (unique.length === 1) return unique[0]!;
     return new UnionType(unique);
+  }
+
+  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+    const newTypes: AbstractType[] = [];
+    for (const t of this.types) {
+      const r = t.applyTypeArguments(args);
+      if (r instanceof Error) {
+        return new Error(
+          `Failed to apply type arguments to union type: ${r.message}`,
+        );
+      }
+      newTypes.push(r);
+    }
+    return UnionType.create(newTypes);
   }
 
   override compareToImpl(other: AbstractType): CompareResult {
@@ -80,6 +95,6 @@ export class UnionType extends AbstractType {
   }
 
   override toString(): string {
-    return this.types.map((t) => t.toString()).join(" | ");
+    return `(${this.types.map((t) => t.toString()).join(" | ")})`;
   }
 }

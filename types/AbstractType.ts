@@ -1,3 +1,5 @@
+import type { AppliedGenerics } from "./AppliedGenerics";
+
 export type CompareResult =
   | {
       type: "equal";
@@ -60,6 +62,19 @@ export abstract class AbstractType {
    */
   getShallowType(): AbstractType {
     return this;
+  }
+
+  /**
+   * Applies type arguments to this type if it is generic.
+   *
+   * Should return a new type with the arguments applied, or an error if the arguments are invalid.
+   */
+  applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+    const shallow = this.getShallowType();
+    if (shallow === this) {
+      return this;
+    }
+    return shallow.applyTypeArguments(args);
   }
 
   /**

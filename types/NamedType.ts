@@ -1,4 +1,5 @@
 import { AbstractType, type CompareResult } from "./AbstractType";
+import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class NamedType extends AbstractType {
   constructor(
@@ -6,6 +7,14 @@ export class NamedType extends AbstractType {
     public type: AbstractType,
   ) {
     super();
+  }
+
+  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+    const r = this.type.applyTypeArguments(args);
+    if (r instanceof Error) {
+      return r;
+    }
+    return new NamedType(this.name, r);
   }
 
   override compareToImpl(other: AbstractType): CompareResult {

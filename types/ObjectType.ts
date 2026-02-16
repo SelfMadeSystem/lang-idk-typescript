@@ -1,10 +1,25 @@
 import { AbstractType, type CompareResult } from "./AbstractType";
+import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class ObjectType extends AbstractType {
   private toStringing = false;
 
   constructor(public properties: Record<string, AbstractType>) {
     super();
+  }
+
+  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+    const newProps: Record<string, AbstractType> = {};
+    for (const [key, type] of Object.entries(this.properties)) {
+      const r = type.applyTypeArguments(args);
+      if (r instanceof Error) {
+        return new Error(
+          `Failed to apply type arguments to property '${key}': ${r.message}`,
+        );
+      }
+      newProps[key] = r;
+    }
+    return new ObjectType(newProps);
   }
 
   override compareToImpl(other: AbstractType): CompareResult {

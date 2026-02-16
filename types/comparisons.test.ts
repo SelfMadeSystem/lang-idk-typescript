@@ -1,31 +1,11 @@
-import { test, expect, describe } from "bun:test";
+import { test, describe } from "bun:test";
 import { UnionType } from "./UnionType";
 import { ObjectType } from "./ObjectType";
 import { IntType, StringType } from "./Primitives";
-import { AbstractType, NeverType } from "./AbstractType";
+import { NeverType } from "./AbstractType";
 import { GenericParameter, GenericType } from "./GenericType";
 import { NamedType } from "./NamedType";
-import { AliasType } from "./AliasType";
-
-function wider(a: AbstractType, b: AbstractType) {
-  expect(a.compareTo(b)).toMatchObject({ type: "wider" });
-  expect(b.compareTo(a)).toMatchObject({ type: "narrower" });
-}
-
-function narrower(a: AbstractType, b: AbstractType) {
-  expect(a.compareTo(b)).toMatchObject({ type: "narrower" });
-  expect(b.compareTo(a)).toMatchObject({ type: "wider" });
-}
-
-function equal(a: AbstractType, b: AbstractType) {
-  expect(a.compareTo(b)).toMatchObject({ type: "equal" });
-  expect(b.compareTo(a)).toMatchObject({ type: "equal" });
-}
-
-function incompatible(a: AbstractType, b: AbstractType) {
-  expect(a.compareTo(b).type).toBe("incompatible");
-  expect(b.compareTo(a).type).toBe("incompatible");
-}
+import { equal, wider, narrower, incompatible } from "./testUtils";
 
 describe("Primitives", () => {
   test("IntType is equal to IntType", () => {
@@ -266,30 +246,45 @@ describe("UnionType", () => {
 
 describe("GenericType", () => {
   test("GenericType with same parameters is equal", () => {
-    const genericType1 = new GenericType([new GenericParameter("A")]);
-    const genericType2 = new GenericType([new GenericParameter("B")]);
+    // TODO: null as any should be replaced
+    const genericType1 = new GenericType(
+      [new GenericParameter("A")],
+      null as any,
+    );
+    const genericType2 = new GenericType(
+      [new GenericParameter("B")],
+      null as any,
+    );
     equal(genericType1, genericType2);
   });
 
   test("GenericType with same constraints is equal", () => {
-    const genericType1 = new GenericType([
-      new GenericParameter("A", new IntType()),
-    ]);
-    const genericType2 = new GenericType([
-      new GenericParameter("B", new IntType()),
-    ]);
+    const genericType1 = new GenericType(
+      [new GenericParameter("A", new IntType())],
+      null as any,
+    );
+    const genericType2 = new GenericType(
+      [new GenericParameter("B", new IntType())],
+      null as any,
+    );
     equal(genericType1, genericType2);
   });
 
   test("GenericType with multiple same constraints without structure is incompatible", () => {
-    const genericType1 = new GenericType([
-      new GenericParameter("A", new IntType()),
-      new GenericParameter("B", new StringType()),
-    ]);
-    const genericType2 = new GenericType([
-      new GenericParameter("C", new StringType()),
-      new GenericParameter("D", new IntType()),
-    ]);
+    const genericType1 = new GenericType(
+      [
+        new GenericParameter("A", new IntType()),
+        new GenericParameter("B", new StringType()),
+      ],
+      null as any,
+    );
+    const genericType2 = new GenericType(
+      [
+        new GenericParameter("C", new StringType()),
+        new GenericParameter("D", new IntType()),
+      ],
+      null as any,
+    );
     incompatible(genericType1, genericType2);
   });
 
@@ -525,28 +520,5 @@ describe("NamedType", () => {
       new GenericType([genericParam2], new ObjectType({ a: genericParam2 })),
     );
     incompatible(namedType1, namedType2);
-  });
-});
-
-describe("AliasType", () => {
-  // Create types out here because AliasType.create will throw if we try to create the same alias name with a different type, and we want to test that behavior as well.
-  const intType = new IntType();
-  const stringType = new StringType();
-  const alias1 = AliasType.define("Alias1", intType);
-  const alias2 = AliasType.define("Alias1", intType);
-  const alias3 = AliasType.define("Alias2", stringType);
-
-  test("AliasType with same name and same underlying type is equal", () => {
-    equal(alias1, alias2);
-  });
-
-  test("AliasType with same name but different underlying type throws error on creation", () => {
-    expect(() => AliasType.define("Alias1", stringType)).toThrow(
-      'Alias name "Alias1" is already used for a different type',
-    );
-  });
-
-  test("AliasType with different name and different underlying type is incompatible", () => {
-    incompatible(alias1, alias3);
   });
 });

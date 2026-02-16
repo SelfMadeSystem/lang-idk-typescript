@@ -1,9 +1,10 @@
 import { AbstractType, type CompareResult } from "./AbstractType";
+import { AppliedGenerics } from "./AppliedGenerics";
 
 export class GenericType extends AbstractType {
   constructor(
     public params: GenericParameter[],
-    public type: AbstractType | null = null,
+    public type: AbstractType,
   ) {
     super();
     params.forEach(
@@ -23,6 +24,55 @@ export class GenericType extends AbstractType {
 
   findIndex(param: GenericParameter): number {
     return this.params.findIndex((p) => p === param);
+  }
+
+  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+    const populateResult = args.populateFromGeneric(this);
+    if (populateResult instanceof Error) {
+      return populateResult;
+    }
+    if (populateResult.length > 0) {
+      const newGeneric = new GenericType(
+        populateResult.map((t) => new GenericParameter(t.name)),
+        this.type,
+      );
+      const newApplied = new AppliedGenerics(
+        [],
+        Object.fromEntries(newGeneric.params.map((p) => [p.name, p])),
+      );
+      for (let i = 0; i < newGeneric.params.length; i++) {
+        const param = newGeneric.params[i]!;
+        const originalParam = this.params[i]!;
+        const newConstraint =
+          originalParam.constraint?.applyTypeArguments(newApplied);
+        if (newConstraint instanceof Error) {
+          return new Error(
+            `Failed to apply type arguments to constraint of generic parameter ${param.name}: ${newConstraint.message}`,
+          );
+        }
+        param.constraint = newConstraint || null;
+        const newDefault =
+          originalParam.defaultType?.applyTypeArguments(newApplied);
+        if (newDefault instanceof Error) {
+          return new Error(
+            `Failed to apply type arguments to default type of generic parameter ${param.name}: ${newDefault.message}`,
+          );
+        }
+        param.defaultType = newDefault || null;
+      }
+
+      args.argsByName.set(
+        this,
+        new Map(newGeneric.params.map((p) => [p.name, p])),
+      );
+    }
+    const r = this.type.applyTypeArguments(args);
+    if (r instanceof Error) {
+      return new Error(
+        `Failed to apply type arguments to generic type: ${r.message}`,
+      );
+    }
+    return r;
   }
 
   override compareToImpl(other: AbstractType): CompareResult {
@@ -118,6 +168,30 @@ export class GenericParameter extends AbstractType {
     public defaultType: AbstractType | null = null,
   ) {
     super();
+  }
+
+  override applyTypeArguments(args: AppliedGenerics): AbstractType | Error {
+    if (args.argsByName.has(this.parent)) {
+      const arg = args.argsByName.get(this.parent)!.get(this.name);
+      if (arg) {
+        if (this.constraint) {
+          const constraintResult = arg.compareTo(this.constraint);
+          if (
+            constraintResult.type === "incompatible" ||
+            constraintResult.type === "wider"
+          ) {
+            return new Error(
+              `Type argument ${arg.toString()} does not satisfy constraint ${this.constraint.toString()} for generic parameter ${this.name}.`,
+            );
+          }
+        }
+        return arg;
+      }
+    }
+    if (this.defaultType) {
+      return this.defaultType.applyTypeArguments(args);
+    }
+    return this;
   }
 
   override compareToImpl(other: AbstractType): CompareResult {
