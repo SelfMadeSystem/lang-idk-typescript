@@ -36,7 +36,10 @@ export abstract class AbstractType {
   /**
    * Used in compareTo implementations to handle trivial cases like identity and never types.
    */
-  protected trivialCompare(other: AbstractType, env: Environment): CompareResult | null {
+  protected trivialCompare(
+    other: AbstractType,
+    env: Environment,
+  ): CompareResult | null {
     if (this === other) {
       return { type: "equal" };
     }
@@ -70,7 +73,10 @@ export abstract class AbstractType {
    *
    * Should return a new type with the arguments applied, or an error if the arguments are invalid.
    */
-  applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
+  applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType | Error {
     const shallow = this.getShallowType(env);
     if (shallow === this) {
       return this;
@@ -105,7 +111,10 @@ export abstract class AbstractType {
    * @param env The environment to use for looking up type definitions during comparison.
    * @returns A CompareResult indicating the relationship.
    */
-  protected abstract compareToImpl(other: AbstractType, env: Environment): CompareResult;
+  protected abstract compareToImpl(
+    other: AbstractType,
+    env: Environment,
+  ): CompareResult;
 
   compareAgainst(other: AbstractType, env: Environment): CompareResult {
     return invertCompareResult(this.compareTo(other, env));
@@ -133,7 +142,7 @@ export abstract class AbstractType {
     return false;
   }
 
-  abstract toString(): string;
+  abstract toString(env: Environment): string;
 }
 
 export class NeverType extends AbstractType {
@@ -148,7 +157,7 @@ export class NeverType extends AbstractType {
     return true;
   }
 
-  override toString(): string {
+  override toString(env: Environment): string {
     return "never";
   }
 }

@@ -2,11 +2,36 @@ import type { AbstractType } from "../types/AbstractType";
 
 export class Environment {
   public parent: Environment | null;
-  public types: Map<string, AbstractType>;
+  public readonly types: Map<string, AbstractType> = new Map();
+  public readonly tempTypes: Map<string, AbstractType> = new Map();
 
   constructor(parent: Environment | null = null) {
     this.parent = parent;
-    this.types = new Map();
+  }
+
+  setTemporary(name: string, type: AbstractType): void {
+    this.tempTypes.set(name, type);
+  }
+
+  lookupTemporary(name: string): AbstractType | null {
+    const type = this.tempTypes.get(name);
+    if (type) {
+      return type;
+    }
+
+    if (this.parent) {
+      return this.parent.lookupTemporary(name);
+    }
+
+    return null;
+  }
+
+  clearTemporary(): void {
+    this.tempTypes.clear();
+  }
+
+  [Symbol.dispose]() {
+    // this.clearTemporary();
   }
 
   define(name: string, type: AbstractType): Error | null {
@@ -29,6 +54,11 @@ export class Environment {
   }
 
   lookup(name: string): AbstractType | null {
+    const tempType = this.lookupTemporary(name);
+    if (tempType) {
+      return tempType;
+    }
+
     const type = this.types.get(name);
     if (type) {
       return type;

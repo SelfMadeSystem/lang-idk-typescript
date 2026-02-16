@@ -1,5 +1,6 @@
 import type { Environment } from "../runtime/Environment";
 import { AbstractType, type CompareResult } from "./AbstractType";
+import { AliasType } from "./AliasType";
 import { AppliedGenerics } from "./AppliedGenerics";
 
 export class GenericType extends AbstractType {
@@ -33,11 +34,29 @@ export class GenericType extends AbstractType {
     return this.params.findIndex((p) => p === param);
   }
 
-  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType | Error {
+    const argsString =
+      "$" + this.toString(env) + ";" + args.toString(env) + "$";
+
+    const lookup = env.lookup(argsString);
+    if (lookup) {
+      return lookup;
+    }
+
+    const alias = new AliasType(argsString);
+
+    alias.overrideName = `<${args.toString(env)}>`;
+
+    env.setTemporary(argsString, alias);
+
     const populateResult = args.populateFromGeneric(this);
     if (populateResult instanceof Error) {
       return populateResult;
     }
+
     if (populateResult.length > 0) {
       const newGeneric = new GenericType(
         populateResult.map((t) => new GenericParameter(t.name)),
@@ -49,17 +68,28 @@ export class GenericType extends AbstractType {
       );
       for (let i = 0; i < newGeneric.params.length; i++) {
         const param = newGeneric.params[i]!;
-        const originalParam = this.params[i]!;
-        const newConstraint =
-          originalParam.constraint?.applyTypeArguments(newApplied, env);
+        const originalParam = this.params.find((p) => p.name === param.name);
+        if (!originalParam) {
+          return new Error(
+            `Failed to find original generic parameter for ${param.name} when applying type arguments to generic type.`,
+          );
+        }
+
+        const newConstraint = originalParam.constraint?.applyTypeArguments(
+          newApplied,
+          env,
+        );
         if (newConstraint instanceof Error) {
           return new Error(
             `Failed to apply type arguments to constraint of generic parameter ${param.name}: ${newConstraint.message}`,
           );
         }
+
         param.constraint = newConstraint || null;
-        const newDefault =
-          originalParam.defaultType?.applyTypeArguments(newApplied, env);
+        const newDefault = originalParam.defaultType?.applyTypeArguments(
+          newApplied,
+          env,
+        );
         if (newDefault instanceof Error) {
           return new Error(
             `Failed to apply type arguments to default type of generic parameter ${param.name}: ${newDefault.message}`,
@@ -69,16 +99,28 @@ export class GenericType extends AbstractType {
       }
 
       args.argsByName.set(
-        this,
+        newGeneric,
         new Map(newGeneric.params.map((p) => [p.name, p])),
       );
+
+      const r = this.type.applyTypeArguments(args, env);
+      if (r instanceof Error) {
+        return new Error(
+          `Failed to apply type arguments to generic type: ${r.message}`,
+        );
+      }
+      newGeneric.type = r;
+      env.setTemporary(argsString, newGeneric);
+      return newGeneric;
     }
+
     const r = this.type.applyTypeArguments(args, env);
     if (r instanceof Error) {
       return new Error(
         `Failed to apply type arguments to generic type: ${r.message}`,
       );
     }
+    env.setTemporary(argsString, r);
     return r;
   }
 
@@ -158,9 +200,11 @@ export class GenericType extends AbstractType {
     return true;
   }
 
-  override toString(): string {
-    const params = this.params.map((param) => param.toFullString()).join(", ");
-    return `<${params}>${this.type ? this.type.toString() : ""}`;
+  override toString(env: Environment): string {
+    const params = this.params
+      .map((param) => param.toFullString(env))
+      .join(", ");
+    return `<${params}>${this.type ? this.type.toString(env) : ""}`;
   }
 }
 
@@ -177,23 +221,24 @@ export class GenericParameter extends AbstractType {
     super();
   }
 
-  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
-    if (args.argsByName.has(this.parent)) {
-      const arg = args.argsByName.get(this.parent)!.get(this.name);
-      if (arg) {
-        if (this.constraint) {
-          const constraintResult = arg.compareTo(this.constraint, env);
-          if (
-            constraintResult.type === "incompatible" ||
-            constraintResult.type === "wider"
-          ) {
-            return new Error(
-              `Type argument ${arg.toString()} does not satisfy constraint ${this.constraint.toString()} for generic parameter ${this.name}.`,
-            );
-          }
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType | Error {
+    const arg = args.get(this.parent, this.name);
+    if (arg) {
+      if (this.constraint) {
+        const constraintResult = arg.compareTo(this.constraint, env);
+        if (
+          constraintResult.type === "incompatible" ||
+          constraintResult.type === "wider"
+        ) {
+          return new Error(
+            `Type argument ${arg.toString(env)} does not satisfy constraint ${this.constraint.toString(env)} for generic parameter ${this.name}.`,
+          );
         }
-        return arg;
       }
+      return arg;
     }
     if (this.defaultType) {
       return this.defaultType.applyTypeArguments(args, env);
@@ -260,15 +305,15 @@ export class GenericParameter extends AbstractType {
     return { type: "narrower" };
   }
 
-  override toString(): string {
+  override toString(env: Environment): string {
     return this.name;
   }
 
-  toFullString(): string {
+  toFullString(env: Environment): string {
     const s1 = this.constraint
-      ? `${this.name}: ${this.constraint.toString()}`
+      ? `${this.name}: ${this.constraint.toString(env)}`
       : this.name;
-    const s2 = this.defaultType ? ` = ${this.defaultType.toString()}` : "";
+    const s2 = this.defaultType ? ` = ${this.defaultType.toString(env)}` : "";
     return s1 + s2;
   }
 }

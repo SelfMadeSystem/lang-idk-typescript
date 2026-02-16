@@ -10,11 +10,11 @@ export class IntType extends AbstractType {
     }
     return {
       type: "incompatible",
-      reason: other.toString() + " is not an int",
+      reason: other.toString(env) + " is not an int",
     };
   }
 
-  override toString(): string {
+  override toString(env: Environment): string {
     return "int";
   }
 }
@@ -28,11 +28,11 @@ export class StringType extends AbstractType {
     }
     return {
       type: "incompatible",
-      reason: other.toString() + " is not a string",
+      reason: other.toString(env) + " is not a string",
     };
   }
 
-  override toString(): string {
+  override toString(env: Environment): string {
     return "string";
   }
 }

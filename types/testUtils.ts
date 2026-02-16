@@ -2,16 +2,16 @@ import type { AbstractType } from "./AbstractType";
 import { expect } from "bun:test";
 
 export function printType(type: AbstractType): void {
-  console.log(type.toString());
+  console.log(type.toString(env));
 }
 
 export function printCompare(a: AbstractType | Error, b: AbstractType | Error) {
   if (a instanceof Error) throw a;
   if (b instanceof Error) throw b;
 
-  console.log(`Comparing ${a.toString()} to ${b.toString()}:`);
+  console.log(`Comparing ${a.toString(env)} to ${b.toString(env)}:`);
   console.log(a.compareTo(b));
-  console.log(`Comparing ${b.toString()} to ${a.toString()}:`);
+  console.log(`Comparing ${b.toString(env)} to ${a.toString(env)}:`);
   console.log(b.compareTo(a));
 }
 

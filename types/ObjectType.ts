@@ -9,7 +9,10 @@ export class ObjectType extends AbstractType {
     super();
   }
 
-  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType | Error {
     const newProps: Record<string, AbstractType> = {};
     for (const [key, type] of Object.entries(this.properties)) {
       const r = type.applyTypeArguments(args, env);
@@ -84,13 +87,13 @@ export class ObjectType extends AbstractType {
     };
   }
 
-  override toString(): string {
+  override toString(env: Environment): string {
     if (this.toStringing) {
       return "{ ... }"; // prevent infinite recursion in toString
     }
     this.toStringing = true;
     const props = Object.entries(this.properties)
-      .map(([key, type]) => `${key}: ${type.toString()}`)
+      .map(([key, type]) => `${key}: ${type.toString(env)}`)
       .join(", ");
     this.toStringing = false;
     return `{ ${props} }`;

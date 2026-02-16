@@ -57,6 +57,7 @@ export class Runtime {
   }
 
   public runStatement(statement: Statement) {
+    console.log("Statement: ", statement.constructor.name);
     if (statement instanceof TypeUnit) {
       const namedType = new NamedType(statement.name.name);
       const result1 = this.environment.define(statement.name.name, namedType);
@@ -113,6 +114,8 @@ export class Runtime {
   public runExpression(
     expression: TypeExpression,
   ): AbstractType | AppliedGenerics | Error {
+    console.log("Running: ", expression.constructor.name, expression.toLangString());
+    using _ = this.environment; // clear temporary types after running each expression
     if (expression instanceof NamedTypeExpr) {
       const result = this.environment.lookup(expression.name.name);
       if (!result) {
@@ -120,13 +123,20 @@ export class Runtime {
           `Type ${expression.name.name} not found in environment`,
         );
       }
+      console.log("Found: ", result.constructor.name, result.toString(this.environment));
       if (expression.next) {
         const nextResult = this.runExpression(expression.next);
         if (nextResult instanceof Error) {
           return nextResult;
         }
         if (nextResult instanceof AppliedGenerics) {
-          return result.applyTypeArguments(nextResult, this.environment);
+          const r = result.applyTypeArguments(nextResult, this.environment);
+          if (r instanceof Error) {
+            return new Error(
+              `Failed to apply type arguments to ${expression.name.name}: ${r.message}`,
+            );
+          }
+          return r;
         }
         return new Error(
           `Expected type arguments after ${expression.name.name}`,
@@ -199,9 +209,6 @@ export class Runtime {
       return genericType;
     }
     if (expression instanceof AppliedGenericExpr) {
-      if (expression.next) {
-        return new Error("Applied generic types with next are not supported");
-      }
       const positional: AbstractType[] = [];
       const named: Record<string, AbstractType> = {};
       for (const arg of expression.args) {
@@ -222,6 +229,20 @@ export class Runtime {
         } else {
           positional.push(result);
         }
+      }
+      if (expression.next) {
+        const nextResult = this.runExpression(expression.next);
+        if (nextResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate applied generic target: ${nextResult.message}`,
+          );
+        }
+        if (!(nextResult instanceof AppliedGenerics)) {
+          return new Error(
+            `Expected a generic type to apply arguments to, got ${typeof nextResult}`,
+          );
+        }
+        return new AppliedGenerics(positional, named, nextResult);
       }
       return new AppliedGenerics(positional, named);
     }
@@ -278,7 +299,7 @@ export class Runtime {
           if (arg instanceof Error) {
             console.error(arg.message);
           } else {
-            console.log(arg.toString());
+            console.log(arg.toString(this.environment));
           }
         }
         break;

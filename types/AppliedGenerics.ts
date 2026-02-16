@@ -1,3 +1,4 @@
+import type { Environment } from "../runtime/Environment";
 import type { AbstractType } from "./AbstractType";
 import type { GenericParameter, GenericType } from "./GenericType";
 
@@ -8,7 +9,21 @@ export class AppliedGenerics {
   constructor(
     public positionalArgs: AbstractType[],
     public namedArgs: Record<string, AbstractType>,
-  ) {}
+    base?: AppliedGenerics,
+  ) {
+    if (base) {
+      this.positionalArgs = [...positionalArgs, ...base.positionalArgs];
+      this.namedArgs = { ...base.namedArgs, ...namedArgs };
+    }
+  }
+
+  get(generic: GenericType, paramName: string): AbstractType | null {
+    const argsForGeneric = this.argsByName.get(generic);
+    if (!argsForGeneric) {
+      return null;
+    }
+    return argsForGeneric.get(paramName) || null;
+  }
 
   /**
    * Returns an error if the provided arguments are invalid for the given generic.
@@ -48,10 +63,12 @@ export class AppliedGenerics {
     return missingParams;
   }
 
-  toString(): string {
-    const positional = this.positionalArgs.map((a) => a.toString()).join(", ");
+  toString(env: Environment): string {
+    const positional = this.positionalArgs
+      .map((a) => a.toString(env))
+      .join(", ");
     const named = Object.entries(this.namedArgs)
-      .map(([k, v]) => `${k}: ${v.toString()}`)
+      .map(([k, v]) => `${k} = ${v.toString(env)}`)
       .join(", ");
     return [positional, named].filter((s) => s).join(", ");
   }

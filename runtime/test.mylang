@@ -1,31 +1,14 @@
-// test types in my language.
-// right now, the language only has types, no actual logic.
-// special "incompatible", "equal", "wider", and "narrower" assertions are
-// supported for testing type comparisons.
-
 type None;
 
-// this creates a type alias
-type MyAlias = string;
-
-// this creates a named type
-type MyNamedType string;
-
-incompatible(MyAlias, MyNamedType);
-
-equal({
-  a: string,
-  b: int,
-}, {
-  a: string,
-  b: int,
-});
-
-type GenericAlias = <A, B> {
-  a: A;
-  b: B;
-  ab: (A | B);
+type List<T>{
+  head: T,
+  tail: (List<T> | None),
 };
 
-print(GenericAlias<B = string, A = int>);
-print(GenericAlias<string, int>);
+// FIXME: can't put comments in the middle of type definitions
+// FIXME: A<int> isn't working because it's applying <int> to A, the GenericParameter, not to what the GenericParameter will be replaced with, which is List.
+type GenericGeneric<A> {
+  type: A<int>,
+};
+
+print(GenericGeneric<List>);

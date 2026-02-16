@@ -2,6 +2,8 @@ import type { Environment } from "../runtime/Environment";
 import { AbstractType, type CompareResult } from "./AbstractType";
 
 export class AliasType extends AbstractType {
+  public overrideName: string | null = null;
+
   constructor(public name: string) {
     super();
   }
@@ -24,7 +26,13 @@ export class AliasType extends AbstractType {
     return thisShallow.compareTo(other, env);
   }
 
-  override toString(): string {
+  override toString(env: Environment): string {
+    if (this.overrideName) {
+      return this.overrideName;
+    }
+    if (this.name.includes("$")) {
+      return env.lookup(this.name)?.toString(env) ?? this.name;
+    }
     return this.name;
   }
 }

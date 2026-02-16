@@ -10,7 +10,10 @@ export class NamedType extends AbstractType {
     super();
   }
 
-  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType | Error {
     if (!this.type) {
       return this;
     }
@@ -34,14 +37,17 @@ export class NamedType extends AbstractType {
     }
     if (!this.type || !other.type) {
       // One is opaque and the other is not, so they are incompatible
-      return { type: "incompatible", reason: "One type is opaque and the other is not" };
+      return {
+        type: "incompatible",
+        reason: "One type is opaque and the other is not",
+      };
     }
     // Names match, so compare the underlying types
     // e.g. List<T> and List<U> are compatible if T and U are compatible
     return this.type.compareTo(other.type, env);
   }
 
-  override toString(): string {
-    return this.name + (this.type?.toString() ?? "");
+  override toString(env: Environment): string {
+    return this.name + (this.type?.toString(env) ?? "");
   }
 }

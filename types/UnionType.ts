@@ -30,7 +30,10 @@ export class UnionType extends AbstractType {
     return new UnionType(unique);
   }
 
-  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType | Error {
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType | Error {
     const newTypes: AbstractType[] = [];
     for (const t of this.types) {
       const r = t.applyTypeArguments(args, env);
@@ -95,7 +98,7 @@ export class UnionType extends AbstractType {
     return true;
   }
 
-  override toString(): string {
-    return `(${this.types.map((t) => t.toString()).join(" | ")})`;
+  override toString(env: Environment): string {
+    return `(${this.types.map((t) => t.toString(env)).join(" | ")})`;
   }
 }
