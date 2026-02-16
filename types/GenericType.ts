@@ -115,6 +115,7 @@ export class GenericParameter extends AbstractType {
   constructor(
     public name: string,
     public constraint: AbstractType | null = null,
+    public defaultType: AbstractType | null = null,
   ) {
     super();
   }
@@ -183,8 +184,10 @@ export class GenericParameter extends AbstractType {
   }
 
   toFullString(): string {
-    return this.constraint
+    const s1 = this.constraint
       ? `${this.name}: ${this.constraint.toString()}`
       : this.name;
+    const s2 = this.defaultType ? ` = ${this.defaultType.toString()}` : "";
+    return s1 + s2;
   }
 }

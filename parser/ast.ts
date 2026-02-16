@@ -73,6 +73,7 @@ export abstract class Statement extends AbstractNode {
         Comment.parse(parseStmt),
         TypeDef.parse(parseStmt),
         TypeAlias.parse(parseStmt),
+        TypeUnit.parse(parseStmt),
         FunctionCall.parse(parseStmt),
       ),
     ) as Parser<Statement>;
@@ -213,6 +214,44 @@ export class TypeAlias extends Statement {
 }
 
 /**
+ * type Name;
+ */
+export class TypeUnit extends Statement {
+  public readonly type = "TypeUnit";
+
+  constructor(
+    public name: Identifier,
+    range: Range,
+  ) {
+    super(range);
+  }
+
+  toAstString() {
+    return `TypeUnit(${this.name.toAstString()})`;
+  }
+
+  toLangString() {
+    return `type ${this.name.name};`;
+  }
+
+  static parse: (parseStmt: Parser<Statement>) => Parser<TypeUnit> = () =>
+    p.map(
+      p.sequence(
+        p.literal("type"),
+        p.skipWhitespace,
+        Identifier.parse(),
+        p.skipWhitespace,
+        p.literal(";"),
+      ),
+      ([, , name], start, end) =>
+        new TypeUnit(name, {
+          start: toPlace(start),
+          end: toPlace(end),
+        }),
+    ) as Parser<TypeUnit>;
+}
+
+/**
  * Name(TypeExpression, TypeExpression, ...)
  *
  * Functions calls for now are just for testing type expressions.
@@ -295,7 +334,24 @@ export class Identifier extends AbstractNode {
 export abstract class TypeExpression extends AbstractNode {
   static parseExpr: () => Parser<TypeExpression> = () =>
     p.recursive((parseExpr) =>
-      UnionType.parse(parseExpr),
+      p.choice(
+        NamedType.parse(),
+        GenericType.parse(parseExpr),
+        ObjectType.parse(parseExpr),
+        TupleType.parse(parseExpr),
+        UnionType.parse(parseExpr),
+      ),
+    ) as Parser<TypeExpression>;
+
+  static parseAppliedExpr: () => Parser<TypeExpression> = () =>
+    p.recursive((parseExpr) =>
+      p.choice(
+        NamedType.parse(parseExpr),
+        AppliedGenericType.parse(parseExpr),
+        ObjectType.parse(parseExpr),
+        TupleType.parse(parseExpr),
+        UnionType.parse(parseExpr),
+      ),
     ) as Parser<TypeExpression>;
 }
 
@@ -318,11 +374,15 @@ export class NamedType extends TypeExpression {
     return `${this.name.name}${this.next ? `${this.next.toLangString()}` : ""}`;
   }
 
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<NamedType> = (
+  static parse: (parseExpr?: Parser<TypeExpression>) => Parser<NamedType> = (
     parseExpr,
   ) =>
     p.map(
-      p.sequence(Identifier.parse(), p.skipWhitespace, p.optional(parseExpr)),
+      p.sequence(
+        Identifier.parse(),
+        p.skipWhitespace,
+        p.optional(parseExpr ?? TypeExpression.parseAppliedExpr()),
+      ),
       ([name, , next], start, end) =>
         new NamedType(
           name,
@@ -389,16 +449,23 @@ export class GenericParameter extends TypeExpression {
     public name: Identifier,
     range: Range,
     public constraint?: TypeExpression,
+    public defaultType?: TypeExpression,
   ) {
     super(range);
   }
 
   toAstString() {
-    return `GenericParameter(${this.name.toAstString()}${this.constraint ? `, ${this.constraint.toAstString()}` : ""})`;
+    return `GenericParameter(${this.name.toAstString()}${
+      this.constraint ? `, constraint = ${this.constraint.toAstString()}` : ""
+    }${
+      this.defaultType ? `, default = ${this.defaultType.toAstString()}` : ""
+    })`;
   }
 
   toLangString() {
-    return `${this.name.name}${this.constraint ? `: ${this.constraint.toLangString()}` : ""}`;
+    return `${this.name.name}${
+      this.constraint ? `: ${this.constraint.toLangString()}` : ""
+    }${this.defaultType ? ` = ${this.defaultType.toLangString()}` : ""}`;
   }
 
   static parse: (
@@ -409,8 +476,10 @@ export class GenericParameter extends TypeExpression {
         Identifier.parse(),
         p.skipWhitespace,
         p.optional(p.sequence(p.literal(":"), p.skipWhitespace, parseExpr)),
+        p.skipWhitespace,
+        p.optional(p.sequence(p.literal("="), p.skipWhitespace, parseExpr)),
       ),
-      ([name, , constraint], start, end) =>
+      ([name, , constraint, , defaultType], start, end) =>
         new GenericParameter(
           name,
           {
@@ -418,8 +487,106 @@ export class GenericParameter extends TypeExpression {
             end: toPlace(end),
           },
           constraint ? constraint[2] : undefined,
+          defaultType ? defaultType[2] : undefined,
         ),
     ) as Parser<GenericParameter>;
+}
+
+export class AppliedGenericType extends TypeExpression {
+  public readonly type = "AppliedGenericType";
+
+  constructor(
+    public args: AppliedGenericArgument[],
+    range: Range,
+    public next?: TypeExpression,
+  ) {
+    super(range);
+  }
+
+  toAstString() {
+    return `AppliedGenericType([${this.args.map((arg) => arg.toAstString()).join(", ")}]${this.next ? `, ${this.next.toAstString()}` : ""})`;
+  }
+
+  toLangString() {
+    return `<${this.args.map((arg) => arg.toLangString()).join(", ")}>${this.next ? `${this.next.toLangString()}` : ""}`;
+  }
+
+  static parse: (
+    parseExpr: Parser<TypeExpression>,
+  ) => Parser<AppliedGenericType> = (parseExpr) =>
+    p.map(
+      p.sequence(
+        p.literal("<"),
+        p.skipWhitespace,
+        p.sepBy(
+          AppliedGenericArgument.parse(parseExpr),
+          p.sequence(p.skipWhitespace, p.literal(","), p.skipWhitespace),
+        ),
+        p.skipWhitespace,
+        p.literal(">"),
+        p.skipWhitespace,
+        p.optional(parseExpr),
+      ),
+      ([, , args, , , , next], start, end) =>
+        new AppliedGenericType(
+          args,
+          {
+            start: toPlace(start),
+            end: toPlace(end),
+          },
+          next || undefined,
+        ),
+    ) as Parser<AppliedGenericType>;
+}
+
+export class AppliedGenericArgument extends TypeExpression {
+  public readonly type = "AppliedGenericArgument";
+
+  constructor(
+    public name: Identifier | null,
+    public value: TypeExpression,
+    range: Range,
+  ) {
+    super(range);
+  }
+
+  toAstString() {
+    return `AppliedGenericArgument(${this.name ? this.name.toAstString() : "null"}, ${this.value.toAstString()})`;
+  }
+
+  toLangString() {
+    return `${this.name ? `${this.name.name} = ` : ""}${this.value.toLangString()}`;
+  }
+
+  static parse: (
+    parseExpr: Parser<TypeExpression>,
+  ) => Parser<AppliedGenericArgument> = (parseExpr) =>
+    p.map(
+      p.choice(
+        p.sequence(
+          Identifier.parse(),
+          p.skipWhitespace,
+          p.literal("="),
+          p.skipWhitespace,
+          parseExpr,
+        ),
+        parseExpr,
+      ),
+      (result, start, end) => {
+        if (Array.isArray(result)) {
+          const [name, , , , value] = result;
+          return new AppliedGenericArgument(name, value, {
+            start: toPlace(start),
+            end: toPlace(end),
+          });
+        } else {
+          return new AppliedGenericArgument(null, result, {
+            start: toPlace(start),
+            end: toPlace(end),
+          });
+        }
+      },
+    ) as Parser<AppliedGenericArgument>;
 }
 
 export class ObjectType extends TypeExpression {
@@ -569,16 +736,17 @@ export class UnionType extends TypeExpression {
     parseExpr,
   ) =>
     p.map(
-      p.sepBy(
-        p.choice(
-          NamedType.parse(parseExpr),
-          GenericType.parse(parseExpr),
-          ObjectType.parse(parseExpr),
-          TupleType.parse(parseExpr),
+      p.sequence(
+        p.literal("("),
+        p.skipWhitespace,
+        p.sepBy(
+          parseExpr,
+          p.sequence(p.skipWhitespace, p.literal("|"), p.skipWhitespace),
         ),
-        p.sequence(p.skipWhitespace, p.literal("|"), p.skipWhitespace),
+        p.skipWhitespace,
+        p.literal(")"),
       ),
-      (options, start, end) =>
+      ([, , options], start, end) =>
         options.length === 0
           ? null
           : options.length === 1
