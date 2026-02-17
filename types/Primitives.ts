@@ -4,14 +4,17 @@ import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 export class PrimitiveType extends AbstractType {
   private static instances: Map<string, PrimitiveType> = new Map();
 
-  private constructor(public name: string) {
+  private constructor(
+    public name: string,
+    public inherits: string[] = [],
+  ) {
     super();
   }
 
-  static get(name: string): PrimitiveType {
+  static get(name: string, inherits: string[] = []): PrimitiveType {
     let instance = this.instances.get(name);
     if (!instance) {
-      instance = new PrimitiveType(name);
+      instance = new PrimitiveType(name, inherits);
       this.instances.set(name, instance);
     }
     return instance;
@@ -21,16 +24,24 @@ export class PrimitiveType extends AbstractType {
     const trivial = this.trivialCompare(other, env);
     if (trivial) return trivial;
     if (other instanceof PrimitiveType) {
-      return this.name === other.name
-        ? { type: "equal" }
-        : {
-            type: "incompatible",
-            reason: `Primitive types do not match: ${this.name} vs ${other.name}`,
-          };
+      if (this.name === other.name) {
+        return { type: "equal" };
+      }
+      if (this.inherits.includes(other.name)) {
+        return { type: "narrower" };
+      }
+      if (other.inherits.includes(this.name)) {
+        return { type: "wider" };
+      }
     }
     return {
       type: "incompatible",
-      reason: other.toString(env) + " is not a" + (/^[aeiou]/i.test(this.name) ? "n" : "") + " " + this.name,
+      reason:
+        other.toString(env) +
+        " is not a" +
+        (/^[aeiou]/i.test(this.name) ? "n" : "") +
+        " " +
+        this.name,
     };
   }
 

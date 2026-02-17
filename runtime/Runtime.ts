@@ -29,11 +29,19 @@ import { Environment } from "./Environment";
 export class Runtime {
   public environment: Environment = new Environment();
 
+  private definePrimitive(name: string, inherits: string[] = []) {
+    const primitive = PrimitiveType.get(name, inherits);
+    this.environment.define(name, primitive);
+  }
+
   constructor() {
-    this.environment.define("string", PrimitiveType.get("string"));
-    this.environment.define("float", PrimitiveType.get("float"));
-    this.environment.define("int", PrimitiveType.get("int"));
-    this.environment.define("bool", PrimitiveType.get("bool"));
+    this.definePrimitive("string");
+    this.definePrimitive("number");
+    this.definePrimitive("float", ["number"]);
+    this.definePrimitive("int", ["number"]);
+    this.definePrimitive("boolean");
+    this.definePrimitive("true", ["boolean"]);
+    this.definePrimitive("false", ["boolean"]);
   }
 
   public runModule(module: Module) {
