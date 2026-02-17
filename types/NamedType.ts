@@ -3,6 +3,8 @@ import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class NamedType extends AbstractType {
+  protected nameSet = new Set<string>();
+
   constructor(
     public name: string,
     public type?: AbstractType,
@@ -21,27 +23,92 @@ export class NamedType extends AbstractType {
     return new NamedType(this.name, r);
   }
 
+  getNameSet(): Set<string> {
+    if (this.nameSet.size === 0) {
+      this.nameSet.add(this.name);
+      let currentType = this.type;
+      while (currentType instanceof NamedType) {
+        this.nameSet.add(currentType.name);
+        currentType = currentType.type;
+      }
+    }
+    return this.nameSet;
+  }
+
+  protected compareSubtypeTo(
+    other: NamedType,
+    env: Environment,
+  ): CompareResult {
+    if (!this.type && !other.type) {
+      return { type: "equal" };
+    }
+    if (!this.type) {
+      return { type: "narrower" };
+    }
+    if (!other.type) {
+      return { type: "wider" };
+    }
+    return this.type.compareTo(other.type, env);
+  }
+
   override compareToImpl(other: AbstractType, env: Environment): CompareResult {
     const trivial = this.trivialCompare(other, env);
     if (trivial) return trivial;
-    if (!(other instanceof NamedType) || this.name !== other.name) {
-      // Assume names are globally unique
-      return { type: "incompatible", reason: "Type names do not match" };
+    if (!(other instanceof NamedType)) {
+      // comparing (name){...} to (){...}
+      if (!this.type) {
+        return { type: "incompatible", reason: "Expected " + this.name };
+      }
+      const comparison = this.type.compareTo(other, env);
+      switch (comparison.type) {
+        case "narrower":
+          return {
+            type: "incompatible",
+            reason:
+              "Structural type is narrower than nominal type " + this.name,
+          };
+        case "equal":
+          return {
+            type: "narrower",
+          };
+        default:
+          return comparison;
+      }
     }
-    if (!this.type && !other.type) {
-      // Both are opaque types with the same name, so they are compatible
-      return { type: "equal" };
+    const isSubset = this.getNameSet().isSubsetOf(other.getNameSet());
+    const isSuperset = this.getNameSet().isSupersetOf(other.getNameSet())
+    if (isSubset && isSuperset) {
+      // comparing (name){...} to (name){...}
+      return this.compareSubtypeTo(other, env);
     }
-    if (!this.type || !other.type) {
-      // One is opaque and the other is not, so they are incompatible
+    if (!isSubset && !isSuperset) {
+      // comparing (name){...} to (otherName){...}
       return {
         type: "incompatible",
-        reason: "One type is opaque and the other is not",
+        reason: `Types ${this.name} and ${other.name} are unrelated`,
       };
     }
-    // Names match, so compare the underlying types
-    // e.g. List<T> and List<U> are compatible if T and U are compatible
-    return this.type.compareTo(other.type, env);
+    const comparison = this.compareSubtypeTo(other, env);
+    if (isSubset) {
+      // comparing (a){...} to (a, b){...}
+      // this must be wider or incompatible
+      if (comparison.type === "narrower") {
+        return {
+          type: "incompatible",
+          reason: `Type ${this.name} is structurally narrower than ${other.name}, but is nominally wider`,
+        };
+      }
+      return comparison;
+    }
+    // comparing (a, b){...} to (a){...}
+    // this must be narrower or incompatible
+    if (comparison.type === "wider") {
+      return {
+        type: "incompatible",
+        reason: `Type ${this.name} is structurally wider than ${other.name}, but is nominally narrower`,
+      };
+    }
+    return comparison;
   }
 
   override getProperty(name: string, env: Environment): AbstractType {

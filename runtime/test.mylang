@@ -1,6 +1,6 @@
-compare(int, float);
-compare(int, number);
-compare(number, int);
-compare(boolean, true);
-compare(boolean, false);
-compare(true, false);
+type Test<A> {
+  a: A;
+};
+
+compare(Test<int>, Test<number>);
+compare(Test<number>, Test);

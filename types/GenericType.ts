@@ -295,7 +295,7 @@ export class GenericParameter extends AbstractType {
       return this.constraint.compareTo(other, env);
     }
 
-    return { type: "narrower" };
+    return { type: "wider" };
   }
 
   override getProperty(name: string, env: Environment): AbstractType {
