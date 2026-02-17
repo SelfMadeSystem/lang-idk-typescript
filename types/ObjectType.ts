@@ -1,6 +1,9 @@
 import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
+import { AliasType } from "./AliasType";
 import type { AppliedGenerics } from "./AppliedGenerics";
+import { PrimitiveType } from "./Primitives";
+import { UnionType } from "./UnionType";
 
 export class ObjectType extends AbstractType {
   private toStringing = false;
@@ -89,6 +92,32 @@ export class ObjectType extends AbstractType {
 
   override getProperty(name: string, env: Environment): AbstractType {
     return this.properties[name] || NeverType.get();
+  }
+
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    if (other instanceof ObjectType) {
+      const newProps: Record<string, AbstractType> = {};
+      const allKeys = new Set([
+        ...Object.keys(this.properties),
+        ...Object.keys(other.properties),
+      ]);
+      for (const key of allKeys) {
+        const thisProp = this.properties[key];
+        const otherProp = other.properties[key];
+        if (thisProp && otherProp) {
+          newProps[key] = thisProp.intersectWith(otherProp, env);
+        } else if (thisProp && !otherProp) {
+          newProps[key] = thisProp;
+        } else if (!thisProp && otherProp) {
+          newProps[key] = otherProp;
+        }
+      }
+      return new ObjectType(newProps);
+    }
+    if (other instanceof NeverType || other instanceof PrimitiveType) {
+      return NeverType.get();
+    }
+    return other.intersectWith(this, env);
   }
 
   override toString(env: Environment): string {

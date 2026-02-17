@@ -1,1 +1,1 @@
-type B = List<A>.b;
+type A = (B & C);

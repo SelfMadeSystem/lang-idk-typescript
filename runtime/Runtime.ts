@@ -15,8 +15,9 @@ import {
   FunctionCall,
   Module,
   AccessExpr,
+  InterTypeExpr,
 } from "../parser/ast";
-import type { AbstractType } from "../types/AbstractType";
+import { NeverType, type AbstractType } from "../types/AbstractType";
 import { AliasType } from "../types/AliasType";
 import { AppliedGenerics } from "../types/AppliedGenerics";
 import { GenericParameter, GenericParamWithArgs, GenericType } from "../types/GenericType";
@@ -42,6 +43,7 @@ export class Runtime {
     this.definePrimitive("boolean");
     this.definePrimitive("true", ["boolean"]);
     this.definePrimitive("false", ["boolean"]);
+    this.environment.define("never", NeverType.get());
   }
 
   public runModule(module: Module) {
@@ -322,6 +324,30 @@ export class Runtime {
           types.push(typeResult);
         }
         return UnionType.create(types, this.environment);
+      }
+      if (expression instanceof InterTypeExpr) {
+        const types: AbstractType[] = [];
+        for (const typeExpr of expression.expressions) {
+          const typeResult = this.runExpression(typeExpr);
+          if (typeResult instanceof Error) {
+            return new Error(
+              `Failed to evaluate intersection type option: ${typeResult.message}`,
+              { cause: typeResult },
+            );
+          }
+          if (typeResult instanceof AppliedGenerics) {
+            return new Error(
+              "Applied generics are not supported in intersection types",
+            );
+          }
+          types.push(typeResult);
+        }
+
+        let result: AbstractType = types[0]!;
+        for (let i = 1; i < types.length; i++) {
+          result = result.intersectWith(types[i]!, this.environment);
+        }
+        return result;
       }
       if (expression instanceof AccessExpr) {
         const targetResult = this.runExpression(expression.object);

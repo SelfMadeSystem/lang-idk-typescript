@@ -94,6 +94,11 @@ export class UnionType extends AbstractType {
     return UnionType.create(props, env);
   }
 
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    const newTypes = this.types.map((t) => t.intersectWith(other, env));
+    return UnionType.create(newTypes, env);
+  }
+
   override isUnion(): boolean {
     return true;
   }

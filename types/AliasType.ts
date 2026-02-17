@@ -55,6 +55,14 @@ export class AliasType extends AbstractType {
     return shallow.getProperty(name, env);
   }
 
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    const shallow = this.getShallowType(env);
+    if (shallow === this) {
+      return this;
+    }
+    return shallow.intersectWith(other, env);
+  }
+
   toStringSimple(env: Environment): string {
     if (this.overrideName) {
       return this.overrideName;

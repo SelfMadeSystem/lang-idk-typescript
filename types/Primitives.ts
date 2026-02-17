@@ -49,6 +49,21 @@ export class PrimitiveType extends AbstractType {
     return NeverType.get();
   }
 
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    if (other instanceof PrimitiveType) {
+      if (this.name === other.name) {
+        return this;
+      }
+      if (this.inherits.includes(other.name)) {
+        return this;
+      }
+      if (other.inherits.includes(this.name)) {
+        return other;
+      }
+    }
+    return NeverType.get();
+  }
+
   override toString(env: Environment): string {
     return this.name;
   }

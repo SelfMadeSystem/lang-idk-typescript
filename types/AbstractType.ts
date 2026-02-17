@@ -127,6 +127,11 @@ export abstract class AbstractType {
    */
   abstract getProperty(name: string, env: Environment): AbstractType;
 
+  /**
+   * Intersects this type with another type, returning a new type that is assignable to both.
+   */
+  abstract intersectWith(other: AbstractType, env: Environment): AbstractType;
+
   equals(other: AbstractType, env: Environment): boolean {
     const result = this.compareTo(other, env);
     return result.type === "equal";
@@ -169,6 +174,10 @@ export class NeverType extends AbstractType {
   }
 
   override getProperty(): AbstractType {
+    return this;
+  }
+
+  override intersectWith(): AbstractType {
     return this;
   }
 

@@ -39,16 +39,24 @@ export class NamedType extends AbstractType {
     other: NamedType,
     env: Environment,
   ): CompareResult {
-    if (!this.type && !other.type) {
+    let myType: AbstractType | undefined = this.type;
+    let otherType: AbstractType | undefined = other.type;
+    while (myType instanceof NamedType) {
+      myType = myType.type;
+    }
+    while (otherType instanceof NamedType) {
+      otherType = otherType.type;
+    }
+    if (!myType && !otherType) {
       return { type: "equal" };
     }
-    if (!this.type) {
+    if (!myType) {
       return { type: "narrower" };
     }
-    if (!other.type) {
+    if (!otherType) {
       return { type: "wider" };
     }
-    return this.type.compareTo(other.type, env);
+    return myType.compareTo(otherType, env);
   }
 
   override compareToImpl(other: AbstractType, env: Environment): CompareResult {
@@ -109,6 +117,14 @@ export class NamedType extends AbstractType {
       };
     }
     return comparison;
+  }
+
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    if (!this.type) {
+      return new NamedType(this.name, other);
+    }
+    const intersected = this.type.intersectWith(other, env);
+    return new NamedType(this.name, intersected);
   }
 
   override getProperty(name: string, env: Environment): AbstractType {

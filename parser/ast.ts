@@ -298,6 +298,7 @@ export abstract class TypeExpression extends AbstractNode {
             ObjectTypeExpr.parse(parseExpr),
             TupleTypeExpr.parse(parseExpr),
             UnionTypeExpr.parse(parseExpr),
+            InterTypeExpr.parse(parseExpr),
           ),
           p.optional(p.sequence(comment, AccessExpr.parse(parseExpr))),
         ),
@@ -323,6 +324,7 @@ export abstract class TypeExpression extends AbstractNode {
         ObjectTypeExpr.parse(parseExpr),
         TupleTypeExpr.parse(parseExpr),
         UnionTypeExpr.parse(parseExpr),
+        InterTypeExpr.parse(parseExpr),
       ),
     ) as Parser<TypeExpression>;
 }
@@ -695,7 +697,7 @@ export class UnionTypeExpr extends TypeExpression {
   }
 
   toLangString() {
-    return `${this.options.map((opt) => opt.toLangString()).join(" | ")}`;
+    return `(${this.options.map((opt) => opt.toLangString()).join(" | ")})`;
   }
 
   static parse: (parseExpr: Parser<TypeExpression>) => Parser<UnionTypeExpr> = (
@@ -719,6 +721,47 @@ export class UnionTypeExpr extends TypeExpression {
                 end: toPlace(end),
               }),
     ) as Parser<UnionTypeExpr>;
+}
+
+export class InterTypeExpr extends TypeExpression {
+  public readonly type = "InterType";
+
+  constructor(
+    public expressions: TypeExpression[],
+    range: Range,
+  ) {
+    super(range);
+  }
+
+  toAstString() {
+    return `InterType([${this.expressions.map((opt) => opt.toAstString()).join(", ")}])`;
+  }
+
+  toLangString() {
+    return `(${this.expressions.map((opt) => opt.toLangString()).join(" & ")})`;
+  }
+
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<InterTypeExpr> = (
+    parseExpr,
+  ) =>
+    p.map(
+      p.sequence(
+        p.literal("("),
+        comment,
+        p.sepBy(parseExpr, p.sequence(comment, p.literal("&"), comment)),
+        comment,
+        p.literal(")"),
+      ),
+      ([, , options], start, end) =>
+        options.length === 0
+          ? null
+          : options.length === 1
+            ? options[0]
+            : new InterTypeExpr(options, {
+                start: toPlace(start),
+                end: toPlace(end),
+              }),
+    ) as Parser<InterTypeExpr>;
 }
 
 export class AccessExpr extends TypeExpression {

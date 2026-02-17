@@ -120,73 +120,30 @@ export class GenericType extends AbstractType {
       this.startComparing();
       other.startComparing();
 
-      if (this.type && other.type) {
-        const result = this.type.compareTo(other.type, env);
-
-        this.resetCompareIndices();
-        other.resetCompareIndices();
-
-        return result;
-      }
+      const result = this.type.compareTo(other.type, env);
 
       this.resetCompareIndices();
       other.resetCompareIndices();
 
-      if (!this.type && !other.type) {
-        // Compare parameters pairwise
-        if (this.params.length !== other.params.length) {
-          return {
-            type: "incompatible",
-            reason: "Generic types have different numbers of parameters",
-          };
-        }
-
-        for (let i = 0; i < this.params.length; i++) {
-          const paramResult = this.params[i]!.compareTo(other.params[i]!, env);
-          if (paramResult.type !== "equal") {
-            return {
-              type: "incompatible",
-              reason: `Generic parameter ${this.params[i]!.name} is not compatible with ${other.params[i]!.name}`,
-            };
-          }
-        }
-
-        return { type: "equal" };
-      }
-
-      return {
-        type: "incompatible",
-        reason: "One generic type has a base type while the other does not",
-      };
+      return result;
     }
 
     this.startComparing();
 
-    if (this.type) {
-      const result = this.type.compareTo(other, env);
-
-      this.resetCompareIndices();
-
-      return result;
-    }
+    const result = this.type.compareTo(other, env);
 
     this.resetCompareIndices();
 
-    // if (!this.type && !other.type) {
-    //   return { type: "equal" };
-    // }
-
-    return {
-      type: "incompatible",
-      reason: "One generic type has a base type while the other does not",
-    };
+    return result;
   }
 
   override getProperty(name: string, env: Environment): AbstractType {
-    if (!this.type) {
-      return NeverType.get();
-    }
     return this.type.getProperty(name, env);
+  }
+
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    // TODO
+    return this;
   }
 
   override isGeneric(): boolean {
@@ -305,6 +262,11 @@ export class GenericParameter extends AbstractType {
     return this.constraint.getProperty(name, env);
   }
 
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    // TODO
+    return this;
+  }
+
   override toString(env: Environment): string {
     return this.name;
   }
@@ -341,6 +303,11 @@ export class GenericParamWithArgs extends AbstractType {
 
   override getProperty(name: string, env: Environment): AbstractType {
     return this.param.getProperty(name, env);
+  }
+
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    // TODO
+    return this;
   }
 
   override toString(env: Environment): string {
