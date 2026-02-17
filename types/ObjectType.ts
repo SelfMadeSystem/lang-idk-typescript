@@ -1,5 +1,5 @@
 import type { Environment } from "../runtime/Environment";
-import { AbstractType, type CompareResult } from "./AbstractType";
+import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class ObjectType extends AbstractType {
@@ -85,6 +85,10 @@ export class ObjectType extends AbstractType {
       type: "incompatible",
       reason: `Cannot compare ObjectType to ${other.constructor.name}`,
     };
+  }
+
+  override getProperty(name: string, env: Environment): AbstractType {
+    return this.properties[name] || NeverType.get();
   }
 
   override toString(env: Environment): string {

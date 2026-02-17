@@ -190,7 +190,7 @@ describe("UnionType", () => {
 
   test("UnionType with no members is never", () => {
     const unionType = UnionType.create([]);
-    const neverType = new NeverType();
+    const neverType = NeverType.get();
     equal(unionType, neverType);
   });
 
@@ -228,7 +228,7 @@ describe("UnionType", () => {
     // in fact, this should be an IntType since UnionType.create can create a
     // union if there is more than one member, return the single member if there
     // is only one, and return NeverType if there are none.
-    const unionType = UnionType.create([new IntType(), new NeverType()]);
+    const unionType = UnionType.create([new IntType(), NeverType.get()]);
     const intType = new IntType();
     equal(unionType, intType);
   });

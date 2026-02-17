@@ -1,12 +1,1 @@
-type None;
-type Some<T> T;
-type Option = <T> (None | Some<T>);
-
-type Ok<T> T;
-type Err<E> E;
-type Result = <T, E> (Ok<T> | Err<E>);
-
-type LinkedList<T> {
-  value: T;
-  next?: LinkedList<T>;
-};
+type B = List<A>.b;

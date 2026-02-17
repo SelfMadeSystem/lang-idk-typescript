@@ -1,10 +1,5 @@
 import type { Environment } from "../runtime/Environment";
-import {
-  AbstractType,
-  invertCompareResult,
-  NeverType,
-  type CompareResult,
-} from "./AbstractType";
+import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class UnionType extends AbstractType {
@@ -25,7 +20,7 @@ export class UnionType extends AbstractType {
     const unique = flattened.filter(
       (t, index) => flattened.findIndex((ut) => ut.equals(t, env)) === index,
     );
-    if (unique.length === 0) return new NeverType();
+    if (unique.length === 0) return NeverType.get();
     if (unique.length === 1) return unique[0]!;
     return new UnionType(unique);
   }
@@ -92,6 +87,11 @@ export class UnionType extends AbstractType {
       type: "incompatible",
       reason: "Union type is not assignable to the other type",
     };
+  }
+
+  override getProperty(name: string, env: Environment): AbstractType {
+    const props = this.types.map((t) => t.getProperty(name, env));
+    return UnionType.create(props, env);
   }
 
   override isUnion(): boolean {

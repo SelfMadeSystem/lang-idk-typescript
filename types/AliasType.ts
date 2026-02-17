@@ -1,9 +1,8 @@
 import type { Environment } from "../runtime/Environment";
-import { AbstractType, type CompareResult } from "./AbstractType";
+import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class AliasType extends AbstractType {
-  protected applyingTypeArgs = false;
   public overrideName: string | null = null;
   public appliedGenerics: AppliedGenerics | null = null;
 
@@ -40,22 +39,20 @@ export class AliasType extends AbstractType {
     args: AppliedGenerics,
     env: Environment,
   ): AbstractType {
-    if (this.applyingTypeArgs) {
-      const clone = new AliasType(this.name);
-      clone.overrideName = this.overrideName;
-      clone.appliedGenerics = this.appliedGenerics || args;
-      return clone;
+    if (this.appliedGenerics) {
+      this.appliedGenerics = this.appliedGenerics.applyTypeArguments(args, env);
+    } else {
+      this.appliedGenerics = args;
     }
-    this.applyingTypeArgs = true;
-    try {
-      if (this.getShallowType(env) === this) {
-        if (!this.appliedGenerics) this.appliedGenerics = args;
-        return this;
-      }
-      return super.applyTypeArguments(args, env);
-    } finally {
-      this.applyingTypeArgs = false;
+    return this;
+  }
+
+  override getProperty(name: string, env: Environment): AbstractType {
+    const shallow = this.getShallowType(env);
+    if (shallow === this) {
+      return NeverType.get();
     }
+    return shallow.getProperty(name, env);
   }
 
   toStringSimple(env: Environment): string {

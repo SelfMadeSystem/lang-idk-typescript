@@ -1,17 +1,15 @@
 type None;
+type Some<T> T;
 
-type LinkedList<T> {
-  value: T,
-  next: (LinkedList<T> | None),
-};
+type Option <T> (Some<T> | None);
 
-print(LinkedList<int>);
-print(LinkedList);
+type Ok<T> T;
+type Err<E> E;
 
-type Layered<T> {
-  value: T;
-  next: Layered<string>;
-};
+type Result <T, E> (Ok<T> | Err<E>);
 
-print(Layered<int>);
-print(Layered);
+print(Option);
+print(Option<int>);
+print(Result);
+print(Result<int>);
+print(Result<int, string>);

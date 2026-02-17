@@ -1,5 +1,5 @@
 import type { Environment } from "../runtime/Environment";
-import { AbstractType, type CompareResult } from "./AbstractType";
+import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class NamedType extends AbstractType {
@@ -44,7 +44,18 @@ export class NamedType extends AbstractType {
     return this.type.compareTo(other.type, env);
   }
 
+  override getProperty(name: string, env: Environment): AbstractType {
+    if (!this.type) {
+      return NeverType.get();
+    }
+    return this.type.getProperty(name, env);
+  }
+
   override toString(env: Environment): string {
-    return this.name + (this.type?.toString(env) ?? "");
+    const nextStr = this.type?.toString(env) ?? "";
+    if (/^[A-Za-z0-9_]/.test(nextStr)) {
+      return this.name + " " + nextStr;
+    }
+    return this.name + nextStr;
   }
 }

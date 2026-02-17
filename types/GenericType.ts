@@ -1,5 +1,5 @@
 import type { Environment } from "../runtime/Environment";
-import { AbstractType, type CompareResult } from "./AbstractType";
+import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
 import { AppliedGenerics } from "./AppliedGenerics";
 
@@ -182,6 +182,13 @@ export class GenericType extends AbstractType {
     };
   }
 
+  override getProperty(name: string, env: Environment): AbstractType {
+    if (!this.type) {
+      return NeverType.get();
+    }
+    return this.type.getProperty(name, env);
+  }
+
   override isGeneric(): boolean {
     return true;
   }
@@ -291,6 +298,13 @@ export class GenericParameter extends AbstractType {
     return { type: "narrower" };
   }
 
+  override getProperty(name: string, env: Environment): AbstractType {
+    if (!this.constraint) {
+      return NeverType.get();
+    }
+    return this.constraint.getProperty(name, env);
+  }
+
   override toString(env: Environment): string {
     return this.name;
   }
@@ -305,11 +319,17 @@ export class GenericParameter extends AbstractType {
 }
 
 export class GenericParamWithArgs extends AbstractType {
-  constructor(public param: GenericParameter, public args: AppliedGenerics) {
+  constructor(
+    public param: GenericParameter,
+    public args: AppliedGenerics,
+  ) {
     super();
   }
 
-  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType {
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType {
     const base = this.param.applyTypeArguments(args, env);
     return base.applyTypeArguments(this.args, env);
   }
@@ -317,6 +337,10 @@ export class GenericParamWithArgs extends AbstractType {
   override compareToImpl(other: AbstractType, env: Environment): CompareResult {
     // TODO: unsure how to properly compare
     return this.param.compareTo(other, env);
+  }
+
+  override getProperty(name: string, env: Environment): AbstractType {
+    return this.param.getProperty(name, env);
   }
 
   override toString(env: Environment): string {

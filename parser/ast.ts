@@ -290,12 +290,28 @@ export class Identifier extends AbstractNode {
 export abstract class TypeExpression extends AbstractNode {
   static parseExpr: () => Parser<TypeExpression> = () =>
     p.recursive((parseExpr) =>
-      p.choice(
-        NamedTypeExpr.parse(),
-        GenericTypeExpr.parse(parseExpr),
-        ObjectTypeExpr.parse(parseExpr),
-        TupleTypeExpr.parse(parseExpr),
-        UnionTypeExpr.parse(parseExpr),
+      p.map(
+        p.sequence(
+          p.choice(
+            NamedTypeExpr.parse(),
+            GenericTypeExpr.parse(parseExpr),
+            ObjectTypeExpr.parse(parseExpr),
+            TupleTypeExpr.parse(parseExpr),
+            UnionTypeExpr.parse(parseExpr),
+          ),
+          p.optional(p.sequence(comment, AccessExpr.parse(parseExpr))),
+        ),
+        ([base, access], start, end) =>
+          access
+            ? access[1].reduce<TypeExpression>(
+                (acc, prop) =>
+                  new AccessExpr(acc, prop, {
+                    start: acc.range.start,
+                    end: prop.range.end,
+                  }),
+                base,
+              )
+            : base,
       ),
     ) as Parser<TypeExpression>;
 
@@ -703,4 +719,32 @@ export class UnionTypeExpr extends TypeExpression {
                 end: toPlace(end),
               }),
     ) as Parser<UnionTypeExpr>;
+}
+
+export class AccessExpr extends TypeExpression {
+  public readonly type = "Access";
+
+  constructor(
+    public object: TypeExpression,
+    public property: Identifier,
+    range: Range,
+  ) {
+    super(range);
+  }
+
+  public static parse: (
+    parseExpr: Parser<TypeExpression>,
+  ) => Parser<Identifier[]> = (parseExpr) =>
+    p.map(
+      p.many(p.sequence(p.literal("."), comment, Identifier.parse(), comment)),
+      (accesses) => accesses.map(([, , id]) => id),
+    ) as Parser<Identifier[]>;
+
+  public override toAstString(): string {
+    return `Access(${this.object.toAstString()}, ${this.property.toAstString()})`;
+  }
+
+  public override toLangString(): string {
+    return `${this.object.toLangString()}.${this.property.toLangString()}`;
+  }
 }

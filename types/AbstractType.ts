@@ -73,10 +73,7 @@ export abstract class AbstractType {
    *
    * Should return a new type with the arguments applied, or an error if the arguments are invalid.
    */
-  applyTypeArguments(
-    args: AppliedGenerics,
-    env: Environment,
-  ): AbstractType {
+  applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType {
     const shallow = this.getShallowType(env);
     if (shallow === this) {
       return this;
@@ -125,6 +122,11 @@ export abstract class AbstractType {
     return result.type === "equal" || result.type === "narrower";
   }
 
+  /**
+   * Accesses the property of this type with the given name, or never if the property does not exist.
+   */
+  abstract getProperty(name: string, env: Environment): AbstractType;
+
   equals(other: AbstractType, env: Environment): boolean {
     const result = this.compareTo(other, env);
     return result.type === "equal";
@@ -146,11 +148,28 @@ export abstract class AbstractType {
 }
 
 export class NeverType extends AbstractType {
+  private static instance: NeverType | null = null;
+
+  private constructor() {
+    super();
+  }
+
+  static get(): NeverType {
+    if (!this.instance) {
+      this.instance = new NeverType();
+    }
+    return this.instance;
+  }
+
   override compareToImpl(other: AbstractType): CompareResult {
     if (other instanceof NeverType) {
       return { type: "equal" };
     }
     return { type: "narrower" };
+  }
+
+  override getProperty(): AbstractType {
+    return this;
   }
 
   override isNever(): boolean {

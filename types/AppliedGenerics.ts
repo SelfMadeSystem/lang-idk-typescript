@@ -63,6 +63,18 @@ export class AppliedGenerics {
     return missingParams;
   }
 
+  applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AppliedGenerics {
+    const newPositional = this.positionalArgs.map((a) => a.applyTypeArguments(args, env));
+    const newNamedEntries = Object.entries(this.namedArgs).map(([k, v]) => [
+      k,
+      v.applyTypeArguments(args, env),
+    ]);
+    return new AppliedGenerics(newPositional, Object.fromEntries(newNamedEntries));
+  }
+
   toString(env: Environment): string {
     const positional = this.positionalArgs
       .map((a) => a.toString(env))

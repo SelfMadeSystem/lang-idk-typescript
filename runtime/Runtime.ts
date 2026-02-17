@@ -14,6 +14,7 @@ import {
   type Statement,
   FunctionCall,
   Module,
+  AccessExpr,
 } from "../parser/ast";
 import type { AbstractType } from "../types/AbstractType";
 import { AliasType } from "../types/AliasType";
@@ -21,7 +22,7 @@ import { AppliedGenerics } from "../types/AppliedGenerics";
 import { GenericParameter, GenericParamWithArgs, GenericType } from "../types/GenericType";
 import { NamedType } from "../types/NamedType";
 import { ObjectType } from "../types/ObjectType";
-import { IntType, StringType } from "../types/Primitives";
+import { PrimitiveType } from "../types/Primitives";
 import { UnionType } from "../types/UnionType";
 import { Environment } from "./Environment";
 
@@ -29,8 +30,10 @@ export class Runtime {
   public environment: Environment = new Environment();
 
   constructor() {
-    this.environment.define("string", new StringType());
-    this.environment.define("int", new IntType());
+    this.environment.define("string", PrimitiveType.get("string"));
+    this.environment.define("float", PrimitiveType.get("float"));
+    this.environment.define("int", PrimitiveType.get("int"));
+    this.environment.define("bool", PrimitiveType.get("bool"));
   }
 
   public runModule(module: Module) {
@@ -136,7 +139,6 @@ export class Runtime {
             `Type ${expression.name.name} not found in environment`,
           );
         }
-        console.log(`Found type ${expression.name.name} in environment: ${result.constructor.name} ${result.toString(this.environment)}`);
         if (expression.next) {
           const nextResult = this.runExpression(expression.next);
           if (nextResult instanceof Error) {
@@ -313,6 +315,19 @@ export class Runtime {
         }
         return UnionType.create(types, this.environment);
       }
+      if (expression instanceof AccessExpr) {
+        const targetResult = this.runExpression(expression.object);
+        if (targetResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate target of access expression: ${targetResult.message}`,
+            { cause: targetResult },
+          );
+        }
+        if (targetResult instanceof AppliedGenerics) {
+          return new Error("Cannot access properties on applied generics");
+        }
+        return targetResult.getProperty(expression.property.name, this.environment);
+      }
     } catch (e) {
       if (e instanceof Error) {
         return e;
@@ -458,6 +473,6 @@ export class Runtime {
       );
     }
     const [a, b] = argResults as [AbstractType, AbstractType];
-    return [a, b];
+    return [a.getShallowType(env), b.getShallowType(env)];
   }
 }
