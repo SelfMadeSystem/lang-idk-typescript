@@ -1,6 +1,17 @@
+type None;
+
+type LinkedList<T> {
+  value: T,
+  next: (LinkedList<T> | None),
+};
+
+print(LinkedList<int>);
+print(LinkedList);
+
 type Layered<T> {
   value: T;
   next: Layered<string>;
 };
 
+print(Layered<int>);
 print(Layered);

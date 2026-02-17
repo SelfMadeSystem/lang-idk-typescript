@@ -81,13 +81,13 @@ export class Runtime {
     }
     if (statement instanceof TypeDef) {
       const namedType = new NamedType(statement.name.name);
-      const result1 = this.environment.define(statement.name.name, namedType);
-      if (result1 instanceof Error) {
-        return result1;
-      }
       const result2 = this.runExpression(statement.expression);
       if (result2 instanceof Error) {
         return result2;
+      }
+      const result1 = this.environment.define(statement.name.name, namedType);
+      if (result1 instanceof Error) {
+        return result1;
       }
       if (result2 instanceof AliasType) {
         return new Error("Type definitions cannot be aliases");
@@ -101,13 +101,13 @@ export class Runtime {
     if (statement instanceof TypeAlias) {
       // Set an alias in case of recursive types, then populate it with the actual type once we have it
       const alias = new AliasType(statement.name.name);
-      const result1 = this.environment.define(statement.name.name, alias);
-      if (result1 instanceof Error) {
-        return result1;
-      }
       const result2 = this.runExpression(statement.expression);
       if (result2 instanceof Error) {
         return result2;
+      }
+      const result1 = this.environment.define(statement.name.name, alias);
+      if (result1 instanceof Error) {
+        return result1;
       }
       if (result2 instanceof AliasType) {
         return new Error("Recursive type aliase detected");

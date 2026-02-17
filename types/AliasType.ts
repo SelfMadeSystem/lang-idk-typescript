@@ -3,6 +3,7 @@ import { AbstractType, type CompareResult } from "./AbstractType";
 import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class AliasType extends AbstractType {
+  protected applyingTypeArgs = false;
   public overrideName: string | null = null;
   public appliedGenerics: AppliedGenerics | null = null;
 
@@ -35,12 +36,26 @@ export class AliasType extends AbstractType {
     return thisShallow.compareTo(other, env);
   }
 
-  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType {
-    if (this.getShallowType(env) === this) {
-      this.appliedGenerics = args;
-      return this;
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType {
+    if (this.applyingTypeArgs) {
+      const clone = new AliasType(this.name);
+      clone.overrideName = this.overrideName;
+      clone.appliedGenerics = this.appliedGenerics || args;
+      return clone;
     }
-    return super.applyTypeArguments(args, env);
+    this.applyingTypeArgs = true;
+    try {
+      if (this.getShallowType(env) === this) {
+        if (!this.appliedGenerics) this.appliedGenerics = args;
+        return this;
+      }
+      return super.applyTypeArguments(args, env);
+    } finally {
+      this.applyingTypeArgs = false;
+    }
   }
 
   toStringSimple(env: Environment): string {

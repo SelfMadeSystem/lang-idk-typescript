@@ -81,5 +81,7 @@ type InfiniteGeneric = <A = B, B = A> A; // evaluating InfiniteGeneric<> current
 // Fix incorrect self-referential generic types
 type Layered<T> {
   value: T;
-  next: Layered<string>; // this right here doesn't properly resolve to Layered<string>
+  next: Layered<string>;
 };
+// idk why but Layered<int> currently resolves to
+// Layered{ value: int, next: Layered{ value: string, next: Layered{ value: string, next: Layered<int> } } }
