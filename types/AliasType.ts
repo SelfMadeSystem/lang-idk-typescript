@@ -1,28 +1,33 @@
 import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import type { AppliedGenerics } from "./AppliedGenerics";
+import { LazyAccessType, LazyApplyArguments } from "./LazyType";
 
 export class AliasType extends AbstractType {
   public overrideName: string | null = null;
-  public appliedGenerics: AppliedGenerics | null = null;
+  protected isFindingShallow = false;
 
   constructor(public name: string) {
     super();
   }
 
   override getShallowType(env: Environment): AbstractType {
-    const result = env.lookup(this.name);
-    if (!result) {
-      throw new Error(`Type ${this.name} not found in environment`);
-    }
-    if (result === this) {
+    if (this.isFindingShallow) {
       return this;
     }
-    const r = result.getShallowType(env);
-    if (this.appliedGenerics) {
-      return r.applyTypeArguments(this.appliedGenerics, env);
+    this.isFindingShallow = true;
+    try {
+      const result = env.lookup(this.name);
+      if (!result) {
+        throw new Error(`Type ${this.name} not found in environment`);
+      }
+      if (result === this) {
+        return this;
+      }
+      return result.getShallowType(env);
+    } finally {
+      this.isFindingShallow = false;
     }
-    return r;
   }
 
   override compareToImpl(other: AbstractType, env: Environment): CompareResult {
@@ -30,7 +35,10 @@ export class AliasType extends AbstractType {
     if (trivial) return trivial;
     const thisShallow = this.getShallowType(env);
     if (thisShallow === this) {
-      return { type: "equal" };
+      return {
+        type: "incompatible",
+        reason: `Could not resolve type alias ${this.name} to a concrete type`,
+      };
     }
     return thisShallow.compareTo(other, env);
   }
@@ -39,18 +47,17 @@ export class AliasType extends AbstractType {
     args: AppliedGenerics,
     env: Environment,
   ): AbstractType {
-    if (this.appliedGenerics) {
-      this.appliedGenerics = this.appliedGenerics.applyTypeArguments(args, env);
-    } else {
-      this.appliedGenerics = args;
+    const shallow = this.getShallowType(env);
+    if (shallow === this) {
+      return new LazyApplyArguments(this, args);
     }
-    return this;
+    return shallow.applyTypeArguments(args, env);
   }
 
   override getProperty(name: string, env: Environment): AbstractType {
     const shallow = this.getShallowType(env);
     if (shallow === this) {
-      return NeverType.get();
+      return new LazyAccessType(this, name);
     }
     return shallow.getProperty(name, env);
   }
@@ -63,7 +70,7 @@ export class AliasType extends AbstractType {
     return shallow.intersectWith(other, env);
   }
 
-  toStringSimple(env: Environment): string {
+  override toString(env: Environment): string {
     if (this.overrideName) {
       return this.overrideName;
     }
@@ -71,13 +78,5 @@ export class AliasType extends AbstractType {
       return env.lookup(this.name)?.toString(env) ?? this.name;
     }
     return this.name;
-  }
-
-  override toString(env: Environment): string {
-    const str = this.toStringSimple(env);
-    if (this.appliedGenerics) {
-      return `${str}<${this.appliedGenerics.toString(env)}>`;
-    }
-    return str;
   }
 }

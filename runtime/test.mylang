@@ -2,7 +2,7 @@
 // type Name ...; <-- this is a type declaration (nominal type)
 // generics are first-class citizens and can be used practically anywhere
 
-type any = (<any> { a: any }).a;
+type any = (<any>{a:any}).a;
 
 type None;
 type Some<T> T;
@@ -21,15 +21,6 @@ type Box<T> {
   value: T;
 };
 
-type User {
-  name: string;
-  age: int;
-};
+type InferValue = <T: { value: any }> T.value;
 
-type Admin (User & {
-  role: string;
-});
-
-wider(User, Admin);
-equal(LinkedList<int>.value, int);
-equal(Box<User>.value, User);
+print(InferValue<Box<{ hi: int }>>); // should print 'int'

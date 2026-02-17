@@ -34,15 +34,7 @@ export class PrimitiveType extends AbstractType {
         return { type: "wider" };
       }
     }
-    return {
-      type: "incompatible",
-      reason:
-        other.toString(env) +
-        " is not a" +
-        (/^[aeiou]/i.test(this.name) ? "n" : "") +
-        " " +
-        this.name,
-    };
+    return other.compareAgainst(this, env);
   }
 
   override getProperty(): AbstractType {

@@ -69,15 +69,15 @@ export class NamedType extends AbstractType {
       }
       const comparison = this.type.compareTo(other, env);
       switch (comparison.type) {
-        case "narrower":
+        case "wider":
           return {
             type: "incompatible",
             reason:
-              "Structural type is narrower than nominal type " + this.name,
+              "Structural type is wider than nominal type " + this.name,
           };
         case "equal":
           return {
-            type: "narrower",
+            type: "wider",
           };
         default:
           return comparison;

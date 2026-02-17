@@ -84,10 +84,7 @@ export class ObjectType extends AbstractType {
         };
       }
     }
-    return {
-      type: "incompatible",
-      reason: `Cannot compare ObjectType to ${other.constructor.name}`,
-    };
+    return other.compareAgainst(this, env);
   }
 
   override getProperty(name: string, env: Environment): AbstractType {

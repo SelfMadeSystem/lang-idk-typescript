@@ -2,6 +2,7 @@ import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
 import { AppliedGenerics } from "./AppliedGenerics";
+import { LazyAccessType } from "./LazyType";
 
 export class GenericType extends AbstractType {
   constructor(
@@ -184,7 +185,11 @@ export class GenericParameter extends AbstractType {
           constraintResult.type === "wider"
         ) {
           throw new Error(
-            `Type argument ${arg.toString(env)} does not satisfy constraint ${this.constraint.toString(env)} for generic parameter ${this.name}.`,
+            `Type argument ${arg.toString(env)} does not satisfy constraint ${this.constraint.toString(
+              env,
+            )} for generic parameter ${this.name}. Comparison result: ${constraintResult.type}${
+              "reason" in constraintResult ? ` (${constraintResult.reason})` : ""
+            }`,
           );
         }
       }
@@ -256,10 +261,7 @@ export class GenericParameter extends AbstractType {
   }
 
   override getProperty(name: string, env: Environment): AbstractType {
-    if (!this.constraint) {
-      return NeverType.get();
-    }
-    return this.constraint.getProperty(name, env);
+    return new LazyAccessType(this, name);
   }
 
   override intersectWith(other: AbstractType, env: Environment): AbstractType {
@@ -277,40 +279,5 @@ export class GenericParameter extends AbstractType {
       : this.name;
     const s2 = this.defaultType ? ` = ${this.defaultType.toString(env)}` : "";
     return s1 + s2;
-  }
-}
-
-export class GenericParamWithArgs extends AbstractType {
-  constructor(
-    public param: GenericParameter,
-    public args: AppliedGenerics,
-  ) {
-    super();
-  }
-
-  override applyTypeArguments(
-    args: AppliedGenerics,
-    env: Environment,
-  ): AbstractType {
-    const base = this.param.applyTypeArguments(args, env);
-    return base.applyTypeArguments(this.args, env);
-  }
-
-  override compareToImpl(other: AbstractType, env: Environment): CompareResult {
-    // TODO: unsure how to properly compare
-    return this.param.compareTo(other, env);
-  }
-
-  override getProperty(name: string, env: Environment): AbstractType {
-    return this.param.getProperty(name, env);
-  }
-
-  override intersectWith(other: AbstractType, env: Environment): AbstractType {
-    // TODO
-    return this;
-  }
-
-  override toString(env: Environment): string {
-    return `${this.param.toString(env)}<${this.args.toString(env)}>`;
   }
 }
