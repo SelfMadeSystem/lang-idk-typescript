@@ -1,4 +1,5 @@
 import type { AbstractType } from "../types/AbstractType";
+import { AliasType } from "../types/AliasType";
 
 export class Environment {
   public parent: Environment | null;
@@ -35,12 +36,13 @@ export class Environment {
   }
 
   define(name: string, type: AbstractType): Error | null {
-    if (this.types.has(name)) {
-      return new Error(`Type ${name} is already defined in this scope`);
+    const t = this.lookup(name);
+    if (t === null || t instanceof AliasType) {
+      this.types.set(name, type);
+      return null;
     }
-
-    this.types.set(name, type);
-    return null;
+    
+    return new Error(`Type ${name} is already defined in this scope`);
   }
 
   set(name: string, type: AbstractType): void {

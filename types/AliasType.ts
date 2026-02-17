@@ -1,8 +1,10 @@
 import type { Environment } from "../runtime/Environment";
 import { AbstractType, type CompareResult } from "./AbstractType";
+import type { AppliedGenerics } from "./AppliedGenerics";
 
 export class AliasType extends AbstractType {
   public overrideName: string | null = null;
+  public appliedGenerics: AppliedGenerics | null = null;
 
   constructor(public name: string) {
     super();
@@ -13,7 +15,14 @@ export class AliasType extends AbstractType {
     if (!result) {
       throw new Error(`Type ${this.name} not found in environment`);
     }
-    return result.getShallowType(env);
+    if (result === this) {
+      return this;
+    }
+    const r = result.getShallowType(env);
+    if (this.appliedGenerics) {
+      return r.applyTypeArguments(this.appliedGenerics, env);
+    }
+    return r;
   }
 
   override compareToImpl(other: AbstractType, env: Environment): CompareResult {
@@ -26,7 +35,15 @@ export class AliasType extends AbstractType {
     return thisShallow.compareTo(other, env);
   }
 
-  override toString(env: Environment): string {
+  override applyTypeArguments(args: AppliedGenerics, env: Environment): AbstractType {
+    if (this.getShallowType(env) === this) {
+      this.appliedGenerics = args;
+      return this;
+    }
+    return super.applyTypeArguments(args, env);
+  }
+
+  toStringSimple(env: Environment): string {
     if (this.overrideName) {
       return this.overrideName;
     }
@@ -34,5 +51,13 @@ export class AliasType extends AbstractType {
       return env.lookup(this.name)?.toString(env) ?? this.name;
     }
     return this.name;
+  }
+
+  override toString(env: Environment): string {
+    const str = this.toStringSimple(env);
+    if (this.appliedGenerics) {
+      return `${str}<${this.appliedGenerics.toString(env)}>`;
+    }
+    return str;
   }
 }

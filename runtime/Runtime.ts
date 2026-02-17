@@ -35,10 +35,14 @@ export class Runtime {
 
   public runModule(module: Module) {
     for (const statement of module.body) {
+      this.aliasStatement(statement);
+    }
+    for (const statement of module.body) {
       const result = this.runStatement(statement);
       if (result instanceof Error) {
         console.error(
           `Error in statement at ${statement.range.start.line}:${statement.range.start.column}: ${result.message}`,
+          { cause: result },
         );
       }
     }
@@ -53,6 +57,16 @@ export class Runtime {
       this.environment = this.environment.parent;
     } else {
       throw new Error("Cannot pop the global environment");
+    }
+  }
+
+  public aliasStatement(statement: Statement) {
+    if (statement instanceof TypeUnit) {
+      this.environment.define(statement.name.name, new AliasType(statement.name.name));
+    } else if (statement instanceof TypeDef) {
+      this.environment.define(statement.name.name, new AliasType(statement.name.name));
+    } else if (statement instanceof TypeAlias) {
+      this.environment.define(statement.name.name, new AliasType(statement.name.name));
     }
   }
 
@@ -122,6 +136,7 @@ export class Runtime {
             `Type ${expression.name.name} not found in environment`,
           );
         }
+        console.log(`Found type ${expression.name.name} in environment: ${result.constructor.name} ${result.toString(this.environment)}`);
         if (expression.next) {
           const nextResult = this.runExpression(expression.next);
           if (nextResult instanceof Error) {
@@ -135,6 +150,7 @@ export class Runtime {
             if (r instanceof Error) {
               return new Error(
                 `Failed to apply type arguments to ${expression.name.name}: ${r.message}`,
+                { cause: r },
               );
             }
             return r;
@@ -150,6 +166,8 @@ export class Runtime {
         const genericParameters: GenericParameter[] = [];
         const genericType = new GenericType([], null as any);
 
+        const pMap = new Map<string, GenericParameter>();
+
         for (const param of expression.args) {
           const p = new GenericParameter(param.name.name);
           const r = this.environment.define(param.name.name, p);
@@ -157,6 +175,11 @@ export class Runtime {
             return r;
           }
           genericType.pushParameter(p);
+          pMap.set(param.name.name, p);
+        }
+
+        for (const param of expression.args) {
+          const p = pMap.get(param.name.name)!;
 
           const constraintResult = param.constraint
             ? this.runExpression(param.constraint)
@@ -164,6 +187,7 @@ export class Runtime {
           if (constraintResult instanceof Error) {
             return new Error(
               `Failed to evaluate constraint for generic parameter ${param.name.name}: ${constraintResult.message}`,
+              { cause: constraintResult },
             );
           }
           if (constraintResult instanceof AppliedGenerics) {
@@ -179,6 +203,7 @@ export class Runtime {
           if (defaultResult instanceof Error) {
             return new Error(
               `Failed to evaluate default type for generic parameter ${param.name.name}: ${defaultResult.message}`,
+              { cause: defaultResult },
             );
           }
           if (defaultResult instanceof AppliedGenerics) {
@@ -197,6 +222,7 @@ export class Runtime {
         if (typeResult instanceof Error) {
           return new Error(
             `Failed to evaluate body of generic type: ${typeResult.message}`,
+            { cause: typeResult },
           );
         }
         if (typeResult instanceof AppliedGenerics) {
@@ -217,6 +243,7 @@ export class Runtime {
           if (result instanceof Error) {
             return new Error(
               `Failed to evaluate type argument: ${result.message}`,
+              { cause: result },
             );
           }
           if (result instanceof AppliedGenerics) {
@@ -236,6 +263,7 @@ export class Runtime {
           if (nextResult instanceof Error) {
             return new Error(
               `Failed to evaluate applied generic target: ${nextResult.message}`,
+              { cause: nextResult },
             );
           }
           if (!(nextResult instanceof AppliedGenerics)) {
@@ -254,6 +282,7 @@ export class Runtime {
           if (typeResult instanceof Error) {
             return new Error(
               `Failed to evaluate type of property ${prop.name.name}: ${typeResult.message}`,
+              { cause: typeResult },
             );
           }
           if (typeResult instanceof AppliedGenerics) {
@@ -272,6 +301,7 @@ export class Runtime {
           if (typeResult instanceof Error) {
             return new Error(
               `Failed to evaluate union type option: ${typeResult.message}`,
+              { cause: typeResult },
             );
           }
           if (typeResult instanceof AppliedGenerics) {
@@ -300,6 +330,7 @@ export class Runtime {
           if (result instanceof Error) {
             return new Error(
               `Failed to evaluate argument for print: ${result.message}`,
+              { cause: result },
             );
           }
           return result;
@@ -307,6 +338,9 @@ export class Runtime {
         for (const arg of args) {
           if (arg instanceof Error) {
             console.error(arg.message);
+            if (arg.cause) {
+              console.error("Caused by:", arg.cause);
+            }
           } else {
             console.log(arg.toString(this.environment));
           }
@@ -418,6 +452,9 @@ export class Runtime {
         `Failed to evaluate arguments for comparison: ${
           argResults.find((r) => r instanceof Error)! as Error
         }.message`,
+        {
+          cause: argResults.find((r) => r instanceof Error) as Error,
+        }
       );
     }
     const [a, b] = argResults as [AbstractType, AbstractType];
