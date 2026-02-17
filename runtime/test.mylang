@@ -1,3 +1,35 @@
-type Wild = (<Wild>{a:Wild}).a;
+// type Name = ...; <-- this is a type alias
+// type Name ...; <-- this is a type declaration (nominal type)
+// generics are first-class citizens and can be used practically anywhere
 
-print(Wild);
+type any = (<any> { a: any }).a;
+
+type None;
+type Some<T> T;
+type Option = <T> (None | Some<T>);
+
+type Ok<T> T;
+type Err<E> E;
+type Result = <T, E> (Ok<T> | Err<E>);
+
+type LinkedList<T> {
+  value: T;
+  next: (LinkedList<T> | None);
+};
+
+type Box<T> {
+  value: T;
+};
+
+type User {
+  name: string;
+  age: int;
+};
+
+type Admin (User & {
+  role: string;
+});
+
+wider(User, Admin);
+equal(LinkedList<int>.value, int);
+equal(Box<User>.value, User);

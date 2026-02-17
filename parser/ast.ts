@@ -293,7 +293,7 @@ export abstract class TypeExpression extends AbstractNode {
       p.map(
         p.sequence(
           p.choice(
-            NamedTypeExpr.parse(),
+            NamedTypeExpr.parse(parseExpr),
             GenericTypeExpr.parse(parseExpr),
             ObjectTypeExpr.parse(parseExpr),
             TupleTypeExpr.parse(parseExpr),
@@ -313,18 +313,6 @@ export abstract class TypeExpression extends AbstractNode {
                 base,
               )
             : base,
-      ),
-    ) as Parser<TypeExpression>;
-
-  static parseAppliedExpr: () => Parser<TypeExpression> = () =>
-    p.recursive((parseExpr) =>
-      p.choice(
-        NamedTypeExpr.parse(parseExpr),
-        AppliedGenericExpr.parse(parseExpr),
-        ObjectTypeExpr.parse(parseExpr),
-        TupleTypeExpr.parse(parseExpr),
-        UnionTypeExpr.parse(parseExpr),
-        InterTypeExpr.parse(parseExpr),
       ),
     ) as Parser<TypeExpression>;
 }
@@ -348,13 +336,13 @@ export class NamedTypeExpr extends TypeExpression {
     return `${this.name.name}${this.next ? `${this.next.toLangString()}` : ""}`;
   }
 
-  static parse: (parseExpr?: Parser<TypeExpression>) => Parser<NamedTypeExpr> =
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<NamedTypeExpr> =
     (parseExpr) =>
       p.map(
         p.sequence(
           Identifier.parse(),
           comment,
-          p.optional(parseExpr ?? TypeExpression.parseAppliedExpr()),
+          p.optional(AppliedGenericExpr.parse(parseExpr)),
         ),
         ([name, , next], start, end) =>
           new NamedTypeExpr(

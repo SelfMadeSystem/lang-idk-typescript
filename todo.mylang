@@ -1,10 +1,5 @@
 // stuff not implemented yet in the language
 
-// booleans
-type true;
-type false;
-type boolean = true | false;
-
 // number ranges
 type positive = 0..;
 type negative = ..0;
@@ -15,6 +10,7 @@ equal(absRange<5>, -5..=5);
 equal(2i..=5i, 2i..6i); // (integers)
 
 // type-level functions
+// will automatically be implemented once the language becomes fully lazy
 type isPositive = <T: number> T extends positive;
 
 type not = <B: boolean> B is false;
@@ -22,14 +18,8 @@ type and = <A: boolean, B: boolean> if A then B else false;
 type or = <A: boolean, B: boolean> if A then true else B;
 type xor = <A: boolean, B: boolean> if A then not<B> else B;
 
-// type-level dot notation
-type MyObject {
-  a: int,
-  b: string,
-};
-
-equal(MyObject.a, int);
-
+// Lazy dot notation evaluation.
+// in general, I just need to make more of the language lazy
 type List<T> {
   head: T,
   tail: List<T> | None,
@@ -39,49 +29,5 @@ type Infer = <T: List> T.head;
 
 equal(Infer<List<string>>, string);
 
-// Intersection types
-type A = {
-  a: int,
-};
-type B = {
-  b: string,
-};
-type C = A & B;
-equal(C, {
-  a: int,
-  b: string,
-});
-
-// Identity sets
-type User {
-  name: string;
-};
-type Admin User & {
-  adminLevel: int;
-};
-equal(Admin extends User, true);
-equal(User extends Admin, false);
-
-// Optional properties
-type WithOptional = {
-  required: int,
-  optional?: string,
-};
-
-equal(WithOptional, ({
-  required: int,
-} | {
-  required: int,
-  optional: string,
-}));
-
 // Prevent trivial infinite recursion e.g.
 type InfiniteGeneric = <A = B, B = A> A; // evaluating InfiniteGeneric<> currently hangs
-
-// Fix incorrect self-referential generic types
-type Layered<T> {
-  value: T;
-  next: Layered<string>;
-};
-// idk why but Layered<int> currently resolves to
-// Layered{ value: int, next: Layered{ value: string, next: Layered{ value: string, next: Layered<int> } } }
