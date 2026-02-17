@@ -33,12 +33,12 @@ export class UnionType extends AbstractType {
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,
-  ): AbstractType | Error {
+  ): AbstractType {
     const newTypes: AbstractType[] = [];
     for (const t of this.types) {
       const r = t.applyTypeArguments(args, env);
       if (r instanceof Error) {
-        return new Error(
+        throw new Error(
           `Failed to apply type arguments to union type: ${r.message}`,
         );
       }

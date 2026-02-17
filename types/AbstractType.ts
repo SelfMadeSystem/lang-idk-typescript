@@ -76,7 +76,7 @@ export abstract class AbstractType {
   applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,
-  ): AbstractType | Error {
+  ): AbstractType {
     const shallow = this.getShallowType(env);
     if (shallow === this) {
       return this;

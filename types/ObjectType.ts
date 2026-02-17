@@ -12,12 +12,12 @@ export class ObjectType extends AbstractType {
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,
-  ): AbstractType | Error {
+  ): AbstractType {
     const newProps: Record<string, AbstractType> = {};
     for (const [key, type] of Object.entries(this.properties)) {
       const r = type.applyTypeArguments(args, env);
       if (r instanceof Error) {
-        return new Error(
+        throw new Error(
           `Failed to apply type arguments to property '${key}': ${r.message}`,
         );
       }

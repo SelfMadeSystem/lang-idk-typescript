@@ -1,13 +1,61 @@
+// test types in my language.
+// right now, the language only has types, no actual logic.
+// special "incompatible", "equal", "wider", and "narrower" assertions are
+// supported for testing type comparisons.
+
 type None;
+
+// this creates a type alias
+type MyAlias = string;
+
+// this creates a named type
+type MyNamedType string;
+
+incompatible(MyAlias, MyNamedType);
+
+equal({
+  a: string,
+  b: int,
+}, {
+  a: string,
+  b: int,
+});
 
 type List<T>{
   head: T,
   tail: (List<T> | None),
 };
 
-// FIXME: A<int> isn't working because it's applying <int> to A, the GenericParameter, not to what the GenericParameter will be replaced with, which is List.
-type GenericGeneric<A> {
+print(List<(int | string)>);
+
+type MultiGeneric<T, U> {
+  a: T,
+  b: U,
+};
+
+print(MultiGeneric<U = int>);
+print(MultiGeneric<int>);
+print(MultiGeneric<int><string>);
+
+type GenericWithConstraint<T: (int | string)> {
+  value: T,
+};
+
+print(GenericWithConstraint<int>);
+print(GenericWithConstraint<None>); // errors out
+
+type GenericWithDefault<T = int> {
+  value: T,
+};
+
+print(GenericWithDefault<>);
+print(GenericWithDefault<string>);
+
+type GenericGeneric = <A> {
   type: A<int>,
 };
 
 print(GenericGeneric<List>);
+compare(GenericGeneric<List>, {
+  type: List<int>,
+});

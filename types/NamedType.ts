@@ -13,14 +13,11 @@ export class NamedType extends AbstractType {
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,
-  ): AbstractType | Error {
+  ): AbstractType {
     if (!this.type) {
       return this;
     }
     const r = this.type.applyTypeArguments(args, env);
-    if (r instanceof Error) {
-      return r;
-    }
     return new NamedType(this.name, r);
   }
 

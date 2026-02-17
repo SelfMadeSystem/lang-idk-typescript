@@ -29,7 +29,7 @@ export class AppliedGenerics {
    * Returns an error if the provided arguments are invalid for the given generic.
    * Returns the list of missing parameters if some parameters are missing but the provided arguments are otherwise valid.
    */
-  populateFromGeneric(generic: GenericType): Error | GenericParameter[] {
+  populateFromGeneric(generic: GenericType): GenericParameter[] {
     if (this.argsByName.has(generic)) {
       return this.populateResult.get(generic)!;
     }
@@ -37,7 +37,7 @@ export class AppliedGenerics {
     for (let i = 0; i < this.positionalArgs.length; i++) {
       const param = generic.params[i];
       if (!param) {
-        return new Error(
+        throw new Error(
           `Too many positional arguments provided. Expected ${generic.params.length}, got ${this.positionalArgs.length}.`,
         );
       }
@@ -46,10 +46,10 @@ export class AppliedGenerics {
     for (const [name, arg] of Object.entries(this.namedArgs)) {
       const param = generic.params.find((p) => p.name === name);
       if (!param) {
-        return new Error(`Unknown named argument "${name}".`);
+        throw new Error(`Unknown named argument "${name}".`);
       }
       if (argsByName.has(name)) {
-        return new Error(
+        throw new Error(
           `Argument "${name}" provided both positionally and as a named argument.`,
         );
       }

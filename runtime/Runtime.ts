@@ -18,7 +18,7 @@ import {
 import type { AbstractType } from "../types/AbstractType";
 import { AliasType } from "../types/AliasType";
 import { AppliedGenerics } from "../types/AppliedGenerics";
-import { GenericParameter, GenericType } from "../types/GenericType";
+import { GenericParameter, GenericParamWithArgs, GenericType } from "../types/GenericType";
 import { NamedType } from "../types/NamedType";
 import { ObjectType } from "../types/ObjectType";
 import { IntType, StringType } from "../types/Primitives";
@@ -57,7 +57,6 @@ export class Runtime {
   }
 
   public runStatement(statement: Statement) {
-    console.log("Statement: ", statement.constructor.name);
     if (statement instanceof TypeUnit) {
       const namedType = new NamedType(statement.name.name);
       const result1 = this.environment.define(statement.name.name, namedType);
@@ -114,171 +113,181 @@ export class Runtime {
   public runExpression(
     expression: TypeExpression,
   ): AbstractType | AppliedGenerics | Error {
-    console.log("Running: ", expression.constructor.name, expression.toLangString());
     using _ = this.environment; // clear temporary types after running each expression
-    if (expression instanceof NamedTypeExpr) {
-      const result = this.environment.lookup(expression.name.name);
-      if (!result) {
-        return new Error(
-          `Type ${expression.name.name} not found in environment`,
-        );
-      }
-      console.log("Found: ", result.constructor.name, result.toString(this.environment));
-      if (expression.next) {
-        const nextResult = this.runExpression(expression.next);
-        if (nextResult instanceof Error) {
-          return nextResult;
+    try {
+      if (expression instanceof NamedTypeExpr) {
+        const result = this.environment.lookup(expression.name.name);
+        if (!result) {
+          return new Error(
+            `Type ${expression.name.name} not found in environment`,
+          );
         }
-        if (nextResult instanceof AppliedGenerics) {
-          const r = result.applyTypeArguments(nextResult, this.environment);
+        if (expression.next) {
+          const nextResult = this.runExpression(expression.next);
+          if (nextResult instanceof Error) {
+            return nextResult;
+          }
+          if (nextResult instanceof AppliedGenerics) {
+            if (result instanceof GenericParameter) {
+              return new GenericParamWithArgs(result, nextResult);
+            }
+            const r = result.applyTypeArguments(nextResult, this.environment);
+            if (r instanceof Error) {
+              return new Error(
+                `Failed to apply type arguments to ${expression.name.name}: ${r.message}`,
+              );
+            }
+            return r;
+          }
+          return new Error(
+            `Expected type arguments after ${expression.name.name}`,
+          );
+        }
+        return result;
+      }
+      if (expression instanceof GenericTypeExpr) {
+        this.pushEnvironment();
+        const genericParameters: GenericParameter[] = [];
+        const genericType = new GenericType([], null as any);
+
+        for (const param of expression.args) {
+          const p = new GenericParameter(param.name.name);
+          const r = this.environment.define(param.name.name, p);
           if (r instanceof Error) {
+            return r;
+          }
+          genericType.pushParameter(p);
+
+          const constraintResult = param.constraint
+            ? this.runExpression(param.constraint)
+            : null;
+          if (constraintResult instanceof Error) {
             return new Error(
-              `Failed to apply type arguments to ${expression.name.name}: ${r.message}`,
+              `Failed to evaluate constraint for generic parameter ${param.name.name}: ${constraintResult.message}`,
             );
           }
-          return r;
-        }
-        return new Error(
-          `Expected type arguments after ${expression.name.name}`,
-        );
-      }
-      return result;
-    }
-    if (expression instanceof GenericTypeExpr) {
-      this.pushEnvironment();
-      const genericParameters: GenericParameter[] = [];
-      const genericType = new GenericType([], null as any);
-
-      for (const param of expression.args) {
-        const p = new GenericParameter(param.name.name);
-        const r = this.environment.define(param.name.name, p);
-        if (r instanceof Error) {
-          return r;
-        }
-        genericType.pushParameter(p);
-
-        const constraintResult = param.constraint
-          ? this.runExpression(param.constraint)
-          : null;
-        if (constraintResult instanceof Error) {
-          return new Error(
-            `Failed to evaluate constraint for generic parameter ${param.name.name}: ${constraintResult.message}`,
-          );
-        }
-        if (constraintResult instanceof AppliedGenerics) {
-          return new Error(
-            "Applied generics are not supported as generic parameter constraints",
-          );
-        }
-        p.constraint = constraintResult;
-
-        const defaultResult = param.defaultType
-          ? this.runExpression(param.defaultType)
-          : null;
-        if (defaultResult instanceof Error) {
-          return new Error(
-            `Failed to evaluate default type for generic parameter ${param.name.name}: ${defaultResult.message}`,
-          );
-        }
-        if (defaultResult instanceof AppliedGenerics) {
-          return new Error(
-            "Applied generics are not supported as generic parameter default types",
-          );
-        }
-        p.defaultType = defaultResult;
-        genericParameters.push(p);
-      }
-
-      if (!expression.next) {
-        return new Error("Generic type must have a body");
-      }
-      const typeResult = this.runExpression(expression.next);
-      if (typeResult instanceof Error) {
-        return new Error(
-          `Failed to evaluate body of generic type: ${typeResult.message}`,
-        );
-      }
-      if (typeResult instanceof AppliedGenerics) {
-        return new Error(
-          "Applied generics are not supported as generic type bodies",
-        );
-      }
-
-      genericType.type = typeResult;
-      this.popEnvironment();
-      return genericType;
-    }
-    if (expression instanceof AppliedGenericExpr) {
-      const positional: AbstractType[] = [];
-      const named: Record<string, AbstractType> = {};
-      for (const arg of expression.args) {
-        const result = this.runExpression(arg.value);
-        if (result instanceof Error) {
-          return new Error(
-            `Failed to evaluate type argument: ${result.message}`,
-          );
-        }
-        if (result instanceof AppliedGenerics) {
-          return new Error("Nested applied generics are not supported");
-        }
-        if (arg.name) {
-          if (named[arg.name.name]) {
-            return new Error(`Duplicate named argument: ${arg.name.name}`);
+          if (constraintResult instanceof AppliedGenerics) {
+            return new Error(
+              "Applied generics are not supported as generic parameter constraints",
+            );
           }
-          named[arg.name.name] = result;
-        } else {
-          positional.push(result);
+          p.constraint = constraintResult;
+
+          const defaultResult = param.defaultType
+            ? this.runExpression(param.defaultType)
+            : null;
+          if (defaultResult instanceof Error) {
+            return new Error(
+              `Failed to evaluate default type for generic parameter ${param.name.name}: ${defaultResult.message}`,
+            );
+          }
+          if (defaultResult instanceof AppliedGenerics) {
+            return new Error(
+              "Applied generics are not supported as generic parameter default types",
+            );
+          }
+          p.defaultType = defaultResult;
+          genericParameters.push(p);
         }
-      }
-      if (expression.next) {
-        const nextResult = this.runExpression(expression.next);
-        if (nextResult instanceof Error) {
-          return new Error(
-            `Failed to evaluate applied generic target: ${nextResult.message}`,
-          );
+
+        if (!expression.next) {
+          return new Error("Generic type must have a body");
         }
-        if (!(nextResult instanceof AppliedGenerics)) {
-          return new Error(
-            `Expected a generic type to apply arguments to, got ${typeof nextResult}`,
-          );
-        }
-        return new AppliedGenerics(positional, named, nextResult);
-      }
-      return new AppliedGenerics(positional, named);
-    }
-    if (expression instanceof ObjectTypeExpr) {
-      const properties: Record<string, AbstractType> = {};
-      for (const prop of expression.properties) {
-        const typeResult = this.runExpression(prop.value);
+        const typeResult = this.runExpression(expression.next);
         if (typeResult instanceof Error) {
           return new Error(
-            `Failed to evaluate type of property ${prop.name.name}: ${typeResult.message}`,
+            `Failed to evaluate body of generic type: ${typeResult.message}`,
           );
         }
         if (typeResult instanceof AppliedGenerics) {
           return new Error(
-            "Applied generics are not supported in object types",
+            "Applied generics are not supported as generic type bodies",
           );
         }
-        properties[prop.name.name] = typeResult;
+
+        genericType.type = typeResult;
+        this.popEnvironment();
+        return genericType;
       }
-      return new ObjectType(properties);
-    }
-    if (expression instanceof UnionTypeExpr) {
-      const types: AbstractType[] = [];
-      for (const typeExpr of expression.options) {
-        const typeResult = this.runExpression(typeExpr);
-        if (typeResult instanceof Error) {
-          return new Error(
-            `Failed to evaluate union type option: ${typeResult.message}`,
-          );
+      if (expression instanceof AppliedGenericExpr) {
+        const positional: AbstractType[] = [];
+        const named: Record<string, AbstractType> = {};
+        for (const arg of expression.args) {
+          const result = this.runExpression(arg.value);
+          if (result instanceof Error) {
+            return new Error(
+              `Failed to evaluate type argument: ${result.message}`,
+            );
+          }
+          if (result instanceof AppliedGenerics) {
+            return new Error("Nested applied generics are not supported");
+          }
+          if (arg.name) {
+            if (named[arg.name.name]) {
+              return new Error(`Duplicate named argument: ${arg.name.name}`);
+            }
+            named[arg.name.name] = result;
+          } else {
+            positional.push(result);
+          }
         }
-        if (typeResult instanceof AppliedGenerics) {
-          return new Error("Applied generics are not supported in union types");
+        if (expression.next) {
+          const nextResult = this.runExpression(expression.next);
+          if (nextResult instanceof Error) {
+            return new Error(
+              `Failed to evaluate applied generic target: ${nextResult.message}`,
+            );
+          }
+          if (!(nextResult instanceof AppliedGenerics)) {
+            return new Error(
+              `Expected a generic type to apply arguments to, got ${typeof nextResult}`,
+            );
+          }
+          return new AppliedGenerics(positional, named, nextResult);
         }
-        types.push(typeResult);
+        return new AppliedGenerics(positional, named);
       }
-      return UnionType.create(types, this.environment);
+      if (expression instanceof ObjectTypeExpr) {
+        const properties: Record<string, AbstractType> = {};
+        for (const prop of expression.properties) {
+          const typeResult = this.runExpression(prop.value);
+          if (typeResult instanceof Error) {
+            return new Error(
+              `Failed to evaluate type of property ${prop.name.name}: ${typeResult.message}`,
+            );
+          }
+          if (typeResult instanceof AppliedGenerics) {
+            return new Error(
+              "Applied generics are not supported in object types",
+            );
+          }
+          properties[prop.name.name] = typeResult;
+        }
+        return new ObjectType(properties);
+      }
+      if (expression instanceof UnionTypeExpr) {
+        const types: AbstractType[] = [];
+        for (const typeExpr of expression.options) {
+          const typeResult = this.runExpression(typeExpr);
+          if (typeResult instanceof Error) {
+            return new Error(
+              `Failed to evaluate union type option: ${typeResult.message}`,
+            );
+          }
+          if (typeResult instanceof AppliedGenerics) {
+            return new Error(
+              "Applied generics are not supported in union types",
+            );
+          }
+          types.push(typeResult);
+        }
+        return UnionType.create(types, this.environment);
+      }
+    } catch (e) {
+      if (e instanceof Error) {
+        return e;
+      }
+      return new Error("Unknown error: " + e);
     }
     return new Error("Unknown type expression");
   }

@@ -71,17 +71,15 @@ export abstract class Statement extends AbstractNode {
     ) as Parser<Statement>;
 }
 
-export const comment = p.sequence(
-  p.skipWhitespace,
-  p.optional(
-    p.choice(
-      p.sequence(
-        p.literal("//"),
-        p.regex(/[^\n]*/),
-        p.choice(p.literal("\n"), p.eof),
-      ),
-      p.sequence(p.literal("/*"), p.regex(/[\s\S]*?(?=\*\/)/), p.literal("*/")),
+export const comment = p.many(
+  p.choice(
+    p.whitespace,
+    p.sequence(
+      p.literal("//"),
+      p.regex(/[^\n]*/),
+      p.choice(p.literal("\n"), p.eof),
     ),
+    p.sequence(p.literal("/*"), p.regex(/[\s\S]*?(?=\*\/)/), p.literal("*/")),
   ),
 );
 
