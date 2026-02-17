@@ -5,7 +5,6 @@ type List<T>{
   tail: (List<T> | None),
 };
 
-// FIXME: can't put comments in the middle of type definitions
 // FIXME: A<int> isn't working because it's applying <int> to A, the GenericParameter, not to what the GenericParameter will be replaced with, which is List.
 type GenericGeneric<A> {
   type: A<int>,

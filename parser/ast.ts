@@ -39,9 +39,9 @@ export class Module {
   static parse(name: string): Parser<Module> {
     return p.map(
       p.sequence(
-        p.skipWhitespace,
-        p.sepBy(Statement.parseStmt(), p.skipWhitespace),
-        p.skipWhitespace,
+        comment,
+        p.sepBy(Statement.parseStmt(), comment),
+        comment,
         p.eof,
       ),
       ([, body]) => new Module(name, body),
@@ -63,7 +63,6 @@ export abstract class Statement extends AbstractNode {
   static parseStmt: () => Parser<Statement> = () =>
     p.recursive((parseStmt) =>
       p.choice(
-        Comment.parse(parseStmt),
         TypeDef.parse(parseStmt),
         TypeAlias.parse(parseStmt),
         TypeUnit.parse(parseStmt),
@@ -72,53 +71,19 @@ export abstract class Statement extends AbstractNode {
     ) as Parser<Statement>;
 }
 
-/**
- * // comment
- *
- * multiline comment works too
- */
-export class Comment extends Statement {
-  public readonly type = "Comment";
-
-  constructor(
-    public value: string,
-    range: Range,
-  ) {
-    super(range);
-  }
-
-  toAstString() {
-    return `Comment(${JSON.stringify(this.value)})`;
-  }
-
-  toLangString() {
-    if (this.value.includes("\n")) {
-      return `/*\n${this.value}\n*/`;
-    } else {
-      return `// ${this.value}`;
-    }
-  }
-
-  static parse: (parseStmt: Parser<Statement>) => Parser<Comment> = () =>
+export const comment = p.sequence(
+  p.skipWhitespace,
+  p.optional(
     p.choice(
-      p.map(
-        p.regex(/\/\/[^\n]*/),
-        (match, start, end) =>
-          new Comment(match.slice(2).trim(), {
-            start: toPlace(start),
-            end: toPlace(end),
-          }),
+      p.sequence(
+        p.literal("//"),
+        p.regex(/[^\n]*/),
+        p.choice(p.literal("\n"), p.eof),
       ),
-      p.map(
-        p.regex(/\/\*[\s\S]*?\*\//),
-        (match, start, end) =>
-          new Comment(match.slice(2, -2).trim(), {
-            start: toPlace(start),
-            end: toPlace(end),
-          }),
-      ),
-    ) as Parser<Comment>;
-}
+      p.sequence(p.literal("/*"), p.regex(/[\s\S]*?(?=\*\/)/), p.literal("*/")),
+    ),
+  ),
+);
 
 /**
  * type Name TypeExpression;
@@ -148,11 +113,11 @@ export class TypeDef extends Statement {
     p.map(
       p.sequence(
         p.literal("type"),
-        p.skipWhitespace,
+        comment,
         Identifier.parse(),
-        p.skipWhitespace,
+        comment,
         TypeExpression.parseExpr(),
-        p.skipWhitespace,
+        comment,
         p.literal(";"),
       ),
       ([, , name, , expression], start, end) =>
@@ -189,13 +154,13 @@ export class TypeAlias extends Statement {
     p.map(
       p.sequence(
         p.literal("type"),
-        p.skipWhitespace,
+        comment,
         Identifier.parse(),
-        p.skipWhitespace,
+        comment,
         p.literal("="),
-        p.skipWhitespace,
+        comment,
         TypeExpression.parseExpr(),
-        p.skipWhitespace,
+        comment,
         p.literal(";"),
       ),
       ([, , name, , , , expression], start, end) =>
@@ -231,9 +196,9 @@ export class TypeUnit extends Statement {
     p.map(
       p.sequence(
         p.literal("type"),
-        p.skipWhitespace,
+        comment,
         Identifier.parse(),
-        p.skipWhitespace,
+        comment,
         p.literal(";"),
       ),
       ([, , name], start, end) =>
@@ -272,16 +237,16 @@ export class FunctionCall extends Statement {
     p.map(
       p.sequence(
         Identifier.parse(),
-        p.skipWhitespace,
+        comment,
         p.literal("("),
-        p.skipWhitespace,
+        comment,
         p.sepBy(
           TypeExpression.parseExpr(),
-          p.sequence(p.skipWhitespace, p.literal(","), p.skipWhitespace),
+          p.sequence(comment, p.literal(","), comment),
         ),
-        p.skipWhitespace,
+        comment,
         p.literal(")"),
-        p.skipWhitespace,
+        comment,
         p.literal(";"),
       ),
       ([name, , , , args], start, end) =>
@@ -372,7 +337,7 @@ export class NamedTypeExpr extends TypeExpression {
       p.map(
         p.sequence(
           Identifier.parse(),
-          p.skipWhitespace,
+          comment,
           p.optional(parseExpr ?? TypeExpression.parseAppliedExpr()),
         ),
         ([name, , next], start, end) =>
@@ -411,14 +376,14 @@ export class GenericTypeExpr extends TypeExpression {
       p.map(
         p.sequence(
           p.literal("<"),
-          p.skipWhitespace,
+          comment,
           p.sepBy(
             GenericParameter.parse(parseExpr),
-            p.sequence(p.skipWhitespace, p.literal(","), p.skipWhitespace),
+            p.sequence(comment, p.literal(","), comment),
           ),
-          p.skipWhitespace,
+          comment,
           p.literal(">"),
-          p.skipWhitespace,
+          comment,
           p.optional(parseExpr),
         ),
         ([, , args, , , , next], start, end) =>
@@ -465,10 +430,10 @@ export class GenericParameter extends TypeExpression {
     p.map(
       p.sequence(
         Identifier.parse(),
-        p.skipWhitespace,
-        p.optional(p.sequence(p.literal(":"), p.skipWhitespace, parseExpr)),
-        p.skipWhitespace,
-        p.optional(p.sequence(p.literal("="), p.skipWhitespace, parseExpr)),
+        comment,
+        p.optional(p.sequence(p.literal(":"), comment, parseExpr)),
+        comment,
+        p.optional(p.sequence(p.literal("="), comment, parseExpr)),
       ),
       ([name, , constraint, , defaultType], start, end) =>
         new GenericParameter(
@@ -508,14 +473,14 @@ export class AppliedGenericExpr extends TypeExpression {
     p.map(
       p.sequence(
         p.literal("<"),
-        p.skipWhitespace,
+        comment,
         p.sepBy(
           AppliedGenericArgument.parse(parseExpr),
-          p.sequence(p.skipWhitespace, p.literal(","), p.skipWhitespace),
+          p.sequence(comment, p.literal(","), comment),
         ),
-        p.skipWhitespace,
+        comment,
         p.literal(">"),
-        p.skipWhitespace,
+        comment,
         p.optional(parseExpr),
       ),
       ([, , args, , , , next], start, end) =>
@@ -556,9 +521,9 @@ export class AppliedGenericArgument extends TypeExpression {
       p.choice(
         p.sequence(
           Identifier.parse(),
-          p.skipWhitespace,
+          comment,
           p.literal("="),
-          p.skipWhitespace,
+          comment,
           parseExpr,
         ),
         parseExpr,
@@ -605,16 +570,16 @@ ${this.properties.map((prop) => `  ${prop.toLangString()}`).join("\n")}
       p.map(
         p.sequence(
           p.literal("{"),
-          p.skipWhitespace,
+          comment,
           p.sepBy(
             ObjectProperty.parse(parseExpr),
             p.sequence(
-              p.skipWhitespace,
+              comment,
               p.choice(p.literal(","), p.literal(";")),
-              p.skipWhitespace,
+              comment,
             ),
           ),
-          p.skipWhitespace,
+          comment,
           p.literal("}"),
         ),
         ([, , properties], start, end) =>
@@ -651,9 +616,9 @@ export class ObjectProperty extends TypeExpression {
         p.sequence(
           Identifier.parse(),
           p.optional(p.literal("?")),
-          p.skipWhitespace,
+          comment,
           p.literal(":"),
-          p.skipWhitespace,
+          comment,
           parseExpr,
         ),
         ([name, optional, , , , value], start, end) =>
@@ -688,12 +653,9 @@ export class TupleTypeExpr extends TypeExpression {
     p.map(
       p.sequence(
         p.literal("["),
-        p.skipWhitespace,
-        p.sepBy(
-          parseExpr,
-          p.sequence(p.skipWhitespace, p.literal(","), p.skipWhitespace),
-        ),
-        p.skipWhitespace,
+        comment,
+        p.sepBy(parseExpr, p.sequence(comment, p.literal(","), comment)),
+        comment,
         p.literal("]"),
       ),
       ([, , elements], start, end) =>
@@ -728,12 +690,9 @@ export class UnionTypeExpr extends TypeExpression {
     p.map(
       p.sequence(
         p.literal("("),
-        p.skipWhitespace,
-        p.sepBy(
-          parseExpr,
-          p.sequence(p.skipWhitespace, p.literal("|"), p.skipWhitespace),
-        ),
-        p.skipWhitespace,
+        comment,
+        p.sepBy(parseExpr, p.sequence(comment, p.literal("|"), comment)),
+        comment,
         p.literal(")"),
       ),
       ([, , options], start, end) =>
