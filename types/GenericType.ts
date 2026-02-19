@@ -147,27 +147,78 @@ export class GenericType extends AbstractType {
       return other;
     }
     if (!(other instanceof GenericType)) {
-      this.params.forEach((param) => (param.interConstraint = param.constraint));
+      this.params.forEach(
+        (param) => (param.interConstraint = param.constraint),
+      );
       const intersected = this.type.intersectWith(other, env);
       if (intersected instanceof NeverType) {
         return intersected;
       }
       const newParams = this.params.map(
         (param) =>
-          new GenericParameter(param.name, param.interConstraint, param.defaultType),
+          new GenericParameter(
+            param.name,
+            param.interConstraint,
+            param.defaultType,
+          ),
       );
       const replaceArgs = new AppliedGenerics(newParams, {});
       replaceArgs.argsByName.set(
         this,
-        new Map(this.params.map((p) => [p.name, p])),
+        new Map(newParams.map((p) => [p.name, p])),
       );
       return new GenericType(
         newParams,
         intersected.applyTypeArguments(replaceArgs, env),
       );
     }
-    // TODO
-    return this;
+    this.params.forEach((param) => (param.interConstraint = param.constraint));
+    other.params.forEach((param) => (param.interConstraint = param.constraint));
+    const intersected = this.type.intersectWith(other.type, env);
+
+    if (intersected instanceof NeverType) {
+      return intersected;
+    }
+
+    const newThisParams = this.params.map(
+      (param) =>
+        new GenericParameter(
+          param.name + "0",
+          param.interConstraint,
+          param.defaultType,
+        ),
+    );
+    const newOtherParams = other.params.map(
+      (param) =>
+        new GenericParameter(
+          param.name + "1",
+          param.interConstraint,
+          param.defaultType,
+        ),
+    );
+
+    const newParams = [...newThisParams, ...newOtherParams];
+
+    const replaceArgs = new AppliedGenerics(newParams, {});
+    replaceArgs.argsByName.set(
+      this,
+      new Map(newThisParams.map((p, i) => [this.params[i]!.name, p])),
+    );
+    replaceArgs.argsByName.set(
+      other,
+      new Map(newOtherParams.map((p, i) => [other.params[i]!.name, p])),
+    );
+
+    newParams.forEach((param) => {
+      if (param.constraint) {
+        param.constraint = param.constraint.applyTypeArguments(replaceArgs, env);
+      }
+    });
+
+    return new GenericType(
+      newParams,
+      intersected.applyTypeArguments(replaceArgs, env),
+    );
   }
 
   override isGeneric(): boolean {
@@ -228,7 +279,10 @@ export class GenericParameter extends AbstractType {
     }
     if (this.defaultType) {
       if (this.constraint) {
-        const constraintResult = this.defaultType.compareTo(this.constraint, env);
+        const constraintResult = this.defaultType.compareTo(
+          this.constraint,
+          env,
+        );
         if (
           constraintResult.type === "incompatible" ||
           constraintResult.type === "wider"

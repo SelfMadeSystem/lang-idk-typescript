@@ -1,1 +1,1 @@
-print(((<B>{ b: B }) & { b: int })); // Expected: <B: int>{ b: B }
+print((<B>{ b: B } & <A>{ a: A, b: A }));
