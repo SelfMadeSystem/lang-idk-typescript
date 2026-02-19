@@ -17,12 +17,13 @@ import {
   AccessExpr,
   InterTypeExpr,
   AbstractNode,
+  IfExpr,
 } from "../parser/ast";
 import { NeverType, type AbstractType } from "../types/AbstractType";
 import { AliasType } from "../types/AliasType";
 import { AppliedGenerics } from "../types/AppliedGenerics";
 import { GenericParameter, GenericType } from "../types/GenericType";
-import { LazyApplyArguments } from "../types/LazyType";
+import { LazyApplyArguments, LazyIfElseType } from "../types/LazyType";
 import { NamedType } from "../types/NamedType";
 import { ObjectType } from "../types/ObjectType";
 import { PrimitiveType } from "../types/Primitives";
@@ -443,10 +444,63 @@ export class Runtime {
             `Cannot access properties on applied generics ${atError(expression)}`,
           );
         }
-        return targetResult.getProperty(
-          expression.propertie.name,
-          this.environment,
-        );
+        let result = targetResult;
+        for (const p in expression.properties) {
+          result = result.getProperty(p, this.environment);
+        }
+        return result;
+      }
+      if (expression instanceof IfExpr) {
+        const conditionResult = this.runExpression(expression.condition);
+        if (conditionResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate condition of if expression ${atError(expression)}: ${conditionResult.message}`,
+            { cause: conditionResult },
+          );
+        }
+        if (conditionResult instanceof AppliedGenerics) {
+          return new Error(
+            `Applied generics cannot be used as conditions in if expressions ${atError(expression)}`,
+          );
+        }
+        const thenResult = this.runExpression(expression.thenBranch);
+        if (thenResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate then branch of if expression ${atError(expression)}: ${thenResult.message}`,
+            { cause: thenResult },
+          );
+        }
+        if (thenResult instanceof AppliedGenerics) {
+          return new Error(
+            `Applied generics cannot be used in then branches of if expressions ${atError(expression)}`,
+          );
+        }
+        const elseResult = this.runExpression(expression.elseBranch);
+        if (elseResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate else branch of if expression ${atError(expression)}: ${elseResult.message}`,
+            { cause: elseResult },
+          );
+        }
+        if (elseResult instanceof AppliedGenerics) {
+          return new Error(
+            `Applied generics cannot be used in else branches of if expressions ${atError(expression)}`,
+          );
+        }
+        if (conditionResult instanceof PrimitiveType && conditionResult.name === "true") {
+          return thenResult;
+        } else if (
+          conditionResult instanceof PrimitiveType &&
+          conditionResult.name === "false"
+        ) {
+          return elseResult;
+        } else {
+          return new LazyIfElseType(
+            conditionResult,
+            thenResult,
+            elseResult,
+          );
+        }
       }
     } catch (e) {
       if (e instanceof Error) {

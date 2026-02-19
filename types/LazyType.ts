@@ -1,7 +1,8 @@
 import type { Environment } from "../runtime/Environment";
-import { AbstractType, type CompareResult } from "./AbstractType";
+import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
 import type { AppliedGenerics } from "./AppliedGenerics";
+import { PrimitiveType } from "./Primitives";
 
 export abstract class AbstractLazyType extends AbstractType {
   protected computed: AbstractType | null = null;
@@ -24,7 +25,7 @@ export abstract class AbstractLazyType extends AbstractType {
       }
       const result = this.compute(env);
       if (result && result !== this.type) {
-        this.computed = result.getShallowType(env);
+        this.computed = result.getShallowType(env).getSimplifiedType(env);
         return this.computed;
       }
       return this;
@@ -275,5 +276,67 @@ export class LazyIntersectType extends AbstractLazyType {
 
   override debugString(): string {
     return `LazyIntersectType(type: ${this.type.debugString()}, other: ${this.other.debugString()})`;
+  }
+}
+
+export class LazyIfElseType extends AbstractLazyType {
+  public constructor(
+    public readonly condition: AbstractType,
+    public readonly trueBranch: AbstractType,
+    public readonly falseBranch: AbstractType,
+  ) {
+    super(NeverType.get());
+  }
+
+  override compute(env: Environment): AbstractType | null {
+    const shallow = this.condition.getShallowType(env);
+    if (shallow instanceof PrimitiveType && shallow.name === "true") {
+      return this.trueBranch;
+    }
+    if (shallow instanceof PrimitiveType && shallow.name === "false") {
+      return this.falseBranch;
+    }
+    return null;
+  }
+
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType {
+    return new LazyIfElseType(
+      this.condition.applyTypeArguments(args, env),
+      this.trueBranch.applyTypeArguments(args, env),
+      this.falseBranch.applyTypeArguments(args, env),
+    );
+  }
+
+  override getSimplifiedType(env: Environment): AbstractType {
+    if (!this.computed) this.getShallowType(env);
+    if (this.computed) {
+      return this.computed.getSimplifiedType(env);
+    }
+    const condSimplified = this.condition.getSimplifiedType(env);
+    const trueSimplified = this.trueBranch.getSimplifiedType(env);
+    const falseSimplified = this.falseBranch.getSimplifiedType(env);
+    if (
+      condSimplified !== this.condition ||
+      trueSimplified !== this.trueBranch ||
+      falseSimplified !== this.falseBranch
+    ) {
+      return new LazyIfElseType(
+        condSimplified,
+        trueSimplified,
+        falseSimplified,
+      ).getSimplifiedType(env);
+    }
+    return this;
+  }
+
+  override toStringImpl(env: Environment): string {
+    return `if (${this.condition.toString(env)}) ${this.trueBranch.toString(env)} else ${this.falseBranch.toString(env)}`;
+  }
+
+  override debugString(): string {
+    return `LazyIfElseType(condition: ${this.condition.debugString()}, trueBranch: ${this.trueBranch.debugString()}, falseBranch: ${this.falseBranch.debugString()})`;
   }
 }

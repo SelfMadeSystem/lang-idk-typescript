@@ -1,10 +1,10 @@
 import type { InputState, Parser } from "./parserLib";
 import * as p from "./parserLib";
-
+Error.stackTraceLimit = Infinity;
 export const BIN_OPS = ["is", "wider", "narrower", "extends"] as const;
 export type BinOp = (typeof BIN_OPS)[number];
 
-export const UNI_OPS = [""] as const;
+export const UNI_OPS = [] as const;
 export type UniOp = (typeof UNI_OPS)[number];
 
 export const KEYWORDS = [
@@ -451,34 +451,19 @@ export class IfExpr extends TypeExpression {
 
   constructor(
     public condition: TypeExpression,
-    public trueBranch: TypeExpression,
-    public elifBranches: {
-      condition: TypeExpression;
-      branch: TypeExpression;
-    }[],
-    public falseBranch: TypeExpression,
+    public thenBranch: TypeExpression,
+    public elseBranch: TypeExpression,
     range: Range,
   ) {
     super(range);
   }
 
   toAstString() {
-    return `IfExpr(${this.condition.toAstString()}, ${this.trueBranch.toAstString()}, [${this.elifBranches
-      .map(
-        (elif) =>
-          `{ condition: ${elif.condition.toAstString()}, branch: ${elif.branch.toAstString()} }`,
-      )
-      .join(", ")}], ${this.falseBranch.toAstString()})`;
+    return `IfExpr(${this.condition.toAstString()}, ${this.thenBranch.toAstString()} ${this.elseBranch.toAstString()})`;
   }
 
   toLangString() {
-    const elifStr = this.elifBranches
-      .map(
-        (elif) =>
-          ` elif (${elif.condition.toLangString()}) ${elif.branch.toLangString()}`,
-      )
-      .join("");
-    return `if (${this.condition.toLangString()}) ${this.trueBranch.toLangString()}${elifStr} else ${this.falseBranch.toLangString()}`;
+    return `if (${this.condition.toLangString()}) ${this.thenBranch.toLangString()} else ${this.elseBranch.toLangString()}`;
   }
 
   static parse: (parseExpr: Parser<TypeExpression>) => Parser<IfExpr> = (
@@ -495,34 +480,17 @@ export class IfExpr extends TypeExpression {
         p.literal(")"),
         comment,
         parseExpr,
-        p.many(
-          p.sequence(
-            comment,
-            p.literal("elif"),
-            comment,
-            p.literal("("),
-            comment,
-            parseExpr,
-            comment,
-            p.literal(")"),
-            comment,
-            parseExpr,
-          ),
-        ),
+        comment,
         p.sequence(comment, p.literal("else"), comment, parseExpr),
       ),
       (
-        [, , , , condition, , , , trueBranch, elifBranches, elseBranch],
+        [, , , , condition, , , , trueBranch, , elseBranch],
         start,
         end,
       ) =>
         new IfExpr(
           condition,
           trueBranch,
-          elifBranches.map(([, , , , , elifCondition, , , , elifBranch]) => ({
-            condition: elifCondition,
-            branch: elifBranch,
-          })),
           elseBranch[3],
           {
             start: toPlace(start),
