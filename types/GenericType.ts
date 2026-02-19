@@ -157,6 +157,11 @@ export class GenericType extends AbstractType {
       .join(", ");
     return `<${params}>${this.type ? this.type.toString(env) : ""}`;
   }
+
+  override debugString(): string {
+    const params = this.params.map((param) => param.debugString()).join(", ");
+    return `GenericType(params: [${params}], type: ${this.type.debugString()})`;
+  }
 }
 
 export class GenericParameter extends AbstractType {
@@ -188,7 +193,9 @@ export class GenericParameter extends AbstractType {
             `Type argument ${arg.toString(env)} does not satisfy constraint ${this.constraint.toString(
               env,
             )} for generic parameter ${this.name}. Comparison result: ${constraintResult.type}${
-              "reason" in constraintResult ? ` (${constraintResult.reason})` : ""
+              "reason" in constraintResult
+                ? ` (${constraintResult.reason})`
+                : ""
             }`,
           );
         }
@@ -279,5 +286,15 @@ export class GenericParameter extends AbstractType {
       : this.name;
     const s2 = this.defaultType ? ` = ${this.defaultType.toString(env)}` : "";
     return s1 + s2;
+  }
+
+  override debugString(): string {
+    const constraintStr = this.constraint
+      ? `, constraint: ${this.constraint.debugString()}`
+      : "";
+    const defaultStr = this.defaultType
+      ? `, defaultType: ${this.defaultType.debugString()}`
+      : "";
+    return `GenericParameter(name: ${this.name}${constraintStr}${defaultStr})`;
   }
 }

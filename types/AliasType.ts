@@ -79,4 +79,8 @@ export class AliasType extends AbstractType {
     }
     return this.name;
   }
+
+  override debugString(): string {
+    return `AliasType(${this.name})`;
+  }
 }

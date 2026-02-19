@@ -123,7 +123,7 @@ export class Runtime {
       if (result2 instanceof AppliedGenerics) {
         return new Error("Type definitions cannot be applied generics " + atError(statement));
       }
-      namedType.type = result2;
+      namedType.type = result2.getShallowType(this.environment);
       return;
     }
     if (statement instanceof TypeAlias) {
@@ -143,7 +143,7 @@ export class Runtime {
       if (result2 instanceof AppliedGenerics) {
         return new Error("Type aliases cannot be applied generics " + atError(statement));
       }
-      this.environment.set(statement.name.name, result2);
+      this.environment.set(statement.name.name, result2.getShallowType(this.environment));
       return;
     }
     if (statement instanceof FunctionCall) {
@@ -413,6 +413,29 @@ export class Runtime {
             }
           } else {
             console.log(arg.toString(this.environment));
+          }
+        }
+        break;
+      }
+      case "debugPrint": {
+        const args = call.args.map((arg) => {
+          const result = this.runExpression(arg);
+          if (result instanceof Error) {
+            return new Error(
+              `Failed to evaluate argument for print ${atError(arg)}: ${result.message}`,
+              { cause: result },
+            );
+          }
+          return result;
+        });
+        for (const arg of args) {
+          if (arg instanceof Error) {
+            console.error(arg.message);
+            if (arg.cause) {
+              console.error("Caused by:", arg.cause);
+            }
+          } else {
+            console.log(arg.debugString());
           }
         }
         break;

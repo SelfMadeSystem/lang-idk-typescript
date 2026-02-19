@@ -150,6 +150,8 @@ export abstract class AbstractType {
   }
 
   abstract toString(env: Environment): string;
+
+  abstract debugString(): string;
 }
 
 export class NeverType extends AbstractType {
@@ -187,5 +189,9 @@ export class NeverType extends AbstractType {
 
   override toString(env: Environment): string {
     return "never";
+  }
+
+  override debugString(): string {
+    return "NeverType";
   }
 }

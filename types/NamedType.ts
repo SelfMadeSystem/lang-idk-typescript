@@ -141,4 +141,8 @@ export class NamedType extends AbstractType {
     }
     return this.name + nextStr;
   }
+
+  override debugString(): string {
+    return `NamedType(name: ${this.name}, type: ${this.type?.debugString() ?? "undefined"})`;
+  }
 }

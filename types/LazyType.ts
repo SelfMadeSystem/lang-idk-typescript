@@ -23,7 +23,7 @@ export abstract class AbstractLazyType extends AbstractType {
         return this.computed;
       }
       const result = this.compute(env);
-      if (result) {
+      if (result && result !== this.type) {
         this.computed = result.getShallowType(env);
         return result;
       }
@@ -75,6 +75,16 @@ export abstract class AbstractLazyType extends AbstractType {
     }
     return this.type.isUnion();
   }
+
+  abstract toStringImpl(env: Environment): string;
+
+  override toString(env: Environment): string {
+    if (!this.computed) this.getShallowType(env);
+    if (this.computed) {
+      return this.computed.toString(env);
+    }
+    return this.toStringImpl(env);
+  }
 }
 
 export class LazyApplyArguments extends AbstractLazyType {
@@ -91,7 +101,7 @@ export class LazyApplyArguments extends AbstractLazyType {
   ): AbstractType {
     return new LazyApplyArguments(
       this.type.applyTypeArguments(args, env),
-      this.args,
+      this.args.applyTypeArguments(args, env),
     );
   }
 
@@ -100,11 +110,25 @@ export class LazyApplyArguments extends AbstractLazyType {
     if (shallow instanceof AliasType) {
       return null;
     }
-    return shallow.applyTypeArguments(this.args, env);
+    const result = shallow.applyTypeArguments(this.args, env);
+
+    if (
+      result instanceof LazyApplyArguments &&
+      result.type === this.type &&
+      result.args === this.args
+    ) {
+      return null;
+    }
+
+    return result;
   }
 
-  override toString(env: Environment): string {
+  override toStringImpl(env: Environment): string {
     return this.type.toString(env) + "<" + this.args.toString(env) + ">";
+  }
+
+  override debugString(): string {
+    return `LazyApplyArguments(type: ${this.type.debugString()}, args: ${this.args.debugString()})`;
   }
 }
 
@@ -131,14 +155,22 @@ export class LazyAccessType extends AbstractLazyType {
     if (shallow instanceof AliasType) {
       return null;
     }
-    return shallow.getProperty(this.property, env);
+    const result = shallow.getProperty(this.property, env);
+    if (
+      result instanceof LazyAccessType &&
+      result.type === this.type &&
+      result.property === this.property
+    ) {
+      return null;
+    }
+    return result;
   }
 
-  override toString(env: Environment): string {
-    this.getShallowType(env);
-    if (!this.computed) {
-      return this.type.toString(env) + "." + this.property;
-    }
-    return this.computed.toString(env);
+  override toStringImpl(env: Environment): string {
+    return this.type.toString(env) + "." + this.property;
+  }
+
+  override debugString(): string {
+    return `LazyAccessType(type: ${this.type.debugString()}, property: ${this.property})`;
   }
 }

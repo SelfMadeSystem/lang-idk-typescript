@@ -106,4 +106,9 @@ export class UnionType extends AbstractType {
   override toString(env: Environment): string {
     return `(${this.types.map((t) => t.toString(env)).join(" | ")})`;
   }
+
+  override debugString(): string {
+    const typesStr = this.types.map((t) => t.debugString()).join(" | ");
+    return `UnionType(${typesStr})`;
+  }
 }

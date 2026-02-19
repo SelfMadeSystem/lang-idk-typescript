@@ -59,4 +59,8 @@ export class PrimitiveType extends AbstractType {
   override toString(env: Environment): string {
     return this.name;
   }
+
+  override debugString(): string {
+    return `PrimitiveType(name: ${this.name}, inherits: [${this.inherits.join(", ")}])`;
+  }
 }

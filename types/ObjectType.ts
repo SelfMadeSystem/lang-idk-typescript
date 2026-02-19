@@ -128,4 +128,11 @@ export class ObjectType extends AbstractType {
     this.toStringing = false;
     return `{ ${props} }`;
   }
+
+  override debugString(): string {
+    const props = Object.entries(this.properties)
+      .map(([key, type]) => `${key}: ${type.debugString()}`)
+      .join(", ");
+    return `ObjectType({ ${props} })`;
+  }
 }

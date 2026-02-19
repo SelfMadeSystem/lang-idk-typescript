@@ -23,4 +23,9 @@ type Box<T> {
 
 type InferValue = <T: { value: any }> T.value;
 
-print(InferValue<Box<{ hi: int }>>); // should print 'int'
+type ApplyGeneric = <T: <A> any> T<int>;
+
+type A = ApplyGeneric<<A> { value: A }>;
+
+print(A); // prints { value: int }
+print(InferValue<A>); // prints int

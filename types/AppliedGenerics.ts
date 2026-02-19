@@ -84,4 +84,14 @@ export class AppliedGenerics {
       .join(", ");
     return [positional, named].filter((s) => s).join(", ");
   }
+
+  debugString(): string {
+    const positional = this.positionalArgs
+      .map((a) => a.debugString())
+      .join(", ");
+    const named = Object.entries(this.namedArgs)
+      .map(([k, v]) => `${k} = ${v.debugString()}`)
+      .join(", ");
+    return `AppliedGenerics(positionalArgs: [${positional}], namedArgs: {${named}})`;
+  }
 }
