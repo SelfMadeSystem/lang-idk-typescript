@@ -1,5 +1,9 @@
 export type ErrorResult = { success: false; error: string };
-export type SuccessResult<T, S> = { success: true; value: T; remaining: InputState<S> };
+export type SuccessResult<T, S> = {
+  success: true;
+  value: T;
+  remaining: InputState<S>;
+};
 
 /**
  * Result of a parser operation, indicating success or failure.
@@ -7,9 +11,7 @@ export type SuccessResult<T, S> = { success: true; value: T; remaining: InputSta
  * If successful, contains the parsed value and remaining input.
  * If failed, contains an error message.
  */
-export type ParserResult<T, S> =
-  | SuccessResult<T, S>
-  | ErrorResult;
+export type ParserResult<T, S> = SuccessResult<T, S> | ErrorResult;
 
 /**
  * Input to a parser function.
@@ -264,9 +266,7 @@ export const choice =
   <Parsers extends GParser[]>(
     ...parsers: Parsers
   ): Parser<GetT<Parsers[number]>, GetS<Parsers[number]>> =>
-  <S>(
-    input: InputState<S>,
-  ): ParserResult<GetT<Parsers[number]>, S> => {
+  <S>(input: InputState<S>): ParserResult<GetT<Parsers[number]>, S> => {
     for (const parser of parsers) {
       const result = parser(input);
       if (result.success) {
@@ -359,6 +359,28 @@ export const map =
     };
   };
 /**
+ * Ensures the first parser succeeds and then verifies it satisfies a condition.
+ */
+export const and =
+  <P extends GParser, S>(
+    parser: P,
+    condition: (
+      value: GetT<P>,
+      start: InputState<S>,
+      end: InputState<S>,
+    ) => boolean,
+  ): Parser<GetT<P>, GetS<P>> =>
+  (input: InputState<S>): ParserResult<GetT<P>, GetS<P>> => {
+    const result = parser(input);
+    if (!result.success) {
+      return result;
+    }
+    if (!condition(result.value, input, result.remaining)) {
+      return er`Parsed value did not satisfy the condition.`;
+    }
+    return result;
+  };
+/**
  * Errors if the first parser succeeds; otherwise, runs the second parser.
  */
 export const not =
@@ -366,9 +388,7 @@ export const not =
     parser: P,
     ifNotParser: R,
   ): Parser<GetT<R>, GetS<P> & GetS<R>> =>
-  <S>(
-    input: InputState<S>,
-  ): ParserResult<GetT<R>, S> => {
+  <S>(input: InputState<S>): ParserResult<GetT<R>, S> => {
     const result = parser(input);
     if (result.success) {
       return er`Expected parser to fail but it succeeded.`;
@@ -395,9 +415,7 @@ export const sepBy =
     parser: P,
     separator: SParser,
   ): Parser<GetT<P>[], GetS<P> & GetS<SParser>> =>
-  <S>(
-    input: InputState<S>,
-  ): ParserResult<GetT<P>[], S> => {
+  <S>(input: InputState<S>): ParserResult<GetT<P>[], S> => {
     const values: GetT<P>[] = [];
     let remaining = input;
 

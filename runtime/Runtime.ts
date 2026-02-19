@@ -118,12 +118,18 @@ export class Runtime {
         return result1;
       }
       if (result2 instanceof AliasType) {
-        return new Error("Type definitions cannot be aliases " + atError(statement));
+        return new Error(
+          "Type definitions cannot be aliases " + atError(statement),
+        );
       }
       if (result2 instanceof AppliedGenerics) {
-        return new Error("Type definitions cannot be applied generics " + atError(statement));
+        return new Error(
+          "Type definitions cannot be applied generics " + atError(statement),
+        );
       }
-      namedType.type = result2.getShallowType(this.environment).getSimplifiedType(this.environment);
+      namedType.type = result2
+        .getShallowType(this.environment)
+        .getSimplifiedType(this.environment);
       return;
     }
     if (statement instanceof TypeAlias) {
@@ -138,12 +144,21 @@ export class Runtime {
         return result1;
       }
       if (result2 instanceof AliasType) {
-        return new Error("Recursive type aliase detected " + atError(statement));
+        return new Error(
+          "Recursive type aliase detected " + atError(statement),
+        );
       }
       if (result2 instanceof AppliedGenerics) {
-        return new Error("Type aliases cannot be applied generics " + atError(statement));
+        return new Error(
+          "Type aliases cannot be applied generics " + atError(statement),
+        );
       }
-      this.environment.set(statement.name.name, result2.getShallowType(this.environment).getSimplifiedType(this.environment));
+      this.environment.set(
+        statement.name.name,
+        result2
+          .getShallowType(this.environment)
+          .getSimplifiedType(this.environment),
+      );
       return;
     }
     if (statement instanceof FunctionCall) {
@@ -244,7 +259,9 @@ export class Runtime {
           }
 
           if (!expression.next) {
-            return new Error(`Generic type must have a body ${atError(expression)}`);
+            return new Error(
+              `Generic type must have a body ${atError(expression)}`,
+            );
           }
           const typeResult = this.runExpression(expression.next);
           if (typeResult instanceof Error) {
@@ -277,11 +294,15 @@ export class Runtime {
             );
           }
           if (result instanceof AppliedGenerics) {
-            return new Error(`Nested applied generics are not supported ${atError(expression)}`);
+            return new Error(
+              `Nested applied generics are not supported ${atError(expression)}`,
+            );
           }
           if (arg.name) {
             if (named[arg.name.name]) {
-              return new Error(`Duplicate named argument ${atError(expression)}: ${arg.name.name}`);
+              return new Error(
+                `Duplicate named argument ${atError(expression)}: ${arg.name.name}`,
+              );
             }
             named[arg.name.name] = result;
           } else {
@@ -343,7 +364,9 @@ export class Runtime {
         }
         const union = UnionType.create(types, this.environment);
         if (expression.appliedGeneric) {
-          const appliedGenericResult = this.runExpression(expression.appliedGeneric);
+          const appliedGenericResult = this.runExpression(
+            expression.appliedGeneric,
+          );
           if (appliedGenericResult instanceof Error) {
             return new Error(
               `Failed to evaluate applied generic on union type ${atError(expression)}: ${appliedGenericResult.message}`,
@@ -355,7 +378,10 @@ export class Runtime {
               `Expected an applied generic on union type, got ${typeof appliedGenericResult} ${atError(expression)}`,
             );
           }
-          return union.applyTypeArguments(appliedGenericResult, this.environment);
+          return union.applyTypeArguments(
+            appliedGenericResult,
+            this.environment,
+          );
         }
         return union;
       }
@@ -381,9 +407,11 @@ export class Runtime {
         for (let i = 1; i < types.length; i++) {
           result = result.intersectWith(types[i]!, this.environment);
         }
-        
+
         if (expression.appliedGeneric) {
-          const appliedGenericResult = this.runExpression(expression.appliedGeneric);
+          const appliedGenericResult = this.runExpression(
+            expression.appliedGeneric,
+          );
           if (appliedGenericResult instanceof Error) {
             return new Error(
               `Failed to evaluate applied generic on intersection type ${atError(expression)}: ${appliedGenericResult.message}`,
@@ -395,7 +423,10 @@ export class Runtime {
               `Expected an applied generic on intersection type, got ${typeof appliedGenericResult} ${atError(expression)}`,
             );
           }
-          result = result.applyTypeArguments(appliedGenericResult, this.environment);
+          result = result.applyTypeArguments(
+            appliedGenericResult,
+            this.environment,
+          );
         }
         return result;
       }
@@ -408,10 +439,12 @@ export class Runtime {
           );
         }
         if (targetResult instanceof AppliedGenerics) {
-          return new Error(`Cannot access properties on applied generics ${atError(expression)}`);
+          return new Error(
+            `Cannot access properties on applied generics ${atError(expression)}`,
+          );
         }
         return targetResult.getProperty(
-          expression.property.name,
+          expression.propertie.name,
           this.environment,
         );
       }
@@ -440,7 +473,9 @@ export class Runtime {
               `Applied generics cannot be printed ${atError(arg)}`,
             );
           }
-          return result.getShallowType(this.environment).getSimplifiedType(this.environment);
+          return result
+            .getShallowType(this.environment)
+            .getSimplifiedType(this.environment);
         });
         for (const arg of args) {
           if (arg instanceof Error) {
@@ -468,7 +503,9 @@ export class Runtime {
               `Applied generics cannot be printed ${atError(arg)}`,
             );
           }
-          return result.getShallowType(this.environment).getSimplifiedType(this.environment);
+          return result
+            .getShallowType(this.environment)
+            .getSimplifiedType(this.environment);
         });
         for (const arg of args) {
           if (arg instanceof Error) {
@@ -579,7 +616,9 @@ export class Runtime {
     env: Environment,
   ): [AbstractType, AbstractType] | Error {
     if (call.args.length !== 2) {
-      return new Error(`comparison function requires exactly 2 arguments ${atError(call)}`);
+      return new Error(
+        `comparison function requires exactly 2 arguments ${atError(call)}`,
+      );
     }
     const argResults = call.args.map((arg) => this.runExpression(arg));
     if (argResults.some((r) => r instanceof Error)) {
@@ -593,6 +632,9 @@ export class Runtime {
       );
     }
     const [a, b] = argResults as [AbstractType, AbstractType];
-    return [a.getShallowType(env).getSimplifiedType(env), b.getShallowType(env).getSimplifiedType(env)];
+    return [
+      a.getShallowType(env).getSimplifiedType(env),
+      b.getShallowType(env).getSimplifiedType(env),
+    ];
   }
 }

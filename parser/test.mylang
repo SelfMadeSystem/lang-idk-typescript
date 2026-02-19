@@ -1,1 +1,1 @@
-type A = (B & C);
+type Conditional = not b;

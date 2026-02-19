@@ -1,6 +1,22 @@
 import type { InputState, Parser } from "./parserLib";
 import * as p from "./parserLib";
 
+export const BIN_OPS = ["is", "wider", "narrower", "extends"] as const;
+export type BinOp = (typeof BIN_OPS)[number];
+
+export const UNI_OPS = [""] as const;
+export type UniOp = (typeof UNI_OPS)[number];
+
+export const KEYWORDS = [
+  ...BIN_OPS,
+  ...UNI_OPS,
+  "type",
+  "if",
+  "elif",
+  "else",
+] as const;
+export type Keyword = (typeof KEYWORDS)[number];
+
 export type Place = {
   index: number;
   line: number;
@@ -104,7 +120,7 @@ export class TypeDef extends Statement {
   toLangString() {
     const expr = this.expression.toLangString();
     const startWithIdentifier = /^[a-z_]/i.test(expr);
-    return `type ${this.name.name}${startWithIdentifier ? ` ${expr}` : expr};`;
+    return `type ${this.name.toLangString()}${startWithIdentifier ? ` ${expr}` : expr};`;
   }
 
   static parse: (parseStmt: Parser<Statement>) => Parser<TypeDef> = () =>
@@ -145,7 +161,7 @@ export class TypeAlias extends Statement {
   }
 
   toLangString() {
-    return `type ${this.name.name} = ${this.expression.toLangString()};`;
+    return `type ${this.name.toLangString()} = ${this.expression.toLangString()};`;
   }
 
   static parse: (parseStmt: Parser<Statement>) => Parser<TypeAlias> = () =>
@@ -187,7 +203,7 @@ export class TypeUnit extends Statement {
   }
 
   toLangString() {
-    return `type ${this.name.name};`;
+    return `type ${this.name.toLangString()};`;
   }
 
   static parse: (parseStmt: Parser<Statement>) => Parser<TypeUnit> = () =>
@@ -228,7 +244,7 @@ export class FunctionCall extends Statement {
   }
 
   toLangString() {
-    return `${this.name.name}(${this.args.map((arg) => arg.toLangString()).join(", ")});`;
+    return `${this.name.toLangString()}(${this.args.map((arg) => arg.toLangString()).join(", ")});`;
   }
 
   static parse: (parseStmt: Parser<Statement>) => Parser<FunctionCall> = () =>
@@ -256,7 +272,9 @@ export class FunctionCall extends Statement {
 }
 
 /**
- * /[a-z_]([a-z0-9_])* /i
+ * /[a-z_]([a-z0-9_])* /i (not part of KEYWORDS) or "anything here"
+ *
+ * String literal follows same rules as in JSON, but only supports double quotes.
  */
 export class Identifier extends AbstractNode {
   public readonly type = "Identifier";
@@ -273,50 +291,250 @@ export class Identifier extends AbstractNode {
   }
 
   toLangString() {
-    return this.name;
+    if (KEYWORDS.includes(this.name as Keyword)) {
+      return JSON.stringify(this.name);
+    }
+    if (/^[a-z_][a-z0-9_]*$/i.test(this.name)) {
+      return this.name;
+    }
+    return JSON.stringify(this.name);
   }
 
   static parse: () => Parser<Identifier> = () =>
     p.map(
-      p.regex(/[a-z_]([a-z0-9_])*/i),
+      p.choice(Identifier.parseIdentifier(), Identifier.parseStringLiteral()),
       (match, start, end) =>
         new Identifier(match, {
           start: toPlace(start),
           end: toPlace(end),
         }),
     ) as Parser<Identifier>;
+
+  static parseIdentifier: () => Parser<string> = () =>
+    p.and(
+      p.regex(/[a-z_][a-z0-9_]*/i),
+      (name) => !KEYWORDS.includes(name as Keyword),
+    ) as Parser<string>;
+
+  static parseStringLiteral: () => Parser<string> = () =>
+    p.map(
+      p.sequence(p.literal('"'), p.regex(/(?:\\.|[^"\\])*/), p.literal('"')),
+      ([, content]) => JSON.parse(`"${content}"`),
+    ) as Parser<string>;
 }
 
 export abstract class TypeExpression extends AbstractNode {
   static parseExpr: () => Parser<TypeExpression> = () =>
     p.recursive((parseExpr) =>
-      p.map(
-        p.sequence(
-          p.choice(
-            NamedTypeExpr.parse(parseExpr),
-            GenericTypeExpr.parse(parseExpr),
-            ObjectTypeExpr.parse(parseExpr),
-            TupleTypeExpr.parse(parseExpr),
-            UnionTypeExpr.parse(parseExpr),
-            InterTypeExpr.parse(parseExpr),
+      p.choice(
+        UniOpExpr.parse(parseExpr),
+        p.map(
+          p.sequence(
+            p.choice(
+              IfExpr.parse(parseExpr),
+              NamedTypeExpr.parse(parseExpr),
+              GenericTypeExpr.parse(parseExpr),
+              ObjectTypeExpr.parse(parseExpr),
+              TupleTypeExpr.parse(parseExpr),
+              UnionTypeExpr.parse(parseExpr),
+              InterTypeExpr.parse(parseExpr),
+            ),
+            p.optional(
+              p.sequence(
+                comment,
+                p.choice(
+                  BinOpExpr.parse(parseExpr),
+                  AccessExpr.parse(parseExpr),
+                ),
+              ),
+            ),
           ),
-          p.optional(p.sequence(comment, AccessExpr.parse(parseExpr))),
+          ([base, after], start, end) => {
+            if (!after) {
+              return base;
+            } else {
+              const [, op] = after;
+              if (op instanceof BinOpExpr) {
+                op.left = base;
+                return op;
+              } else if (op instanceof AccessExpr) {
+                if (op.properties.length === 0) {
+                  return base;
+                }
+                op.object = base;
+                return op;
+              } else {
+                throw new Error("Unknown expression after base expression");
+              }
+            }
+          },
         ),
-        ([base, access], start, end) =>
-          access
-            ? access[1].reduce<TypeExpression>(
-                (acc, prop) =>
-                  new AccessExpr(acc, prop, {
-                    start: acc.range.start,
-                    end: prop.range.end,
-                  }),
-                base,
-              )
-            : base,
       ),
     ) as Parser<TypeExpression>;
 }
 
+export class BinOpExpr extends TypeExpression {
+  public readonly type = "BinOp";
+
+  constructor(
+    public left: TypeExpression, // will be null just when parsing
+    public operator: BinOp,
+    public right: TypeExpression,
+    range: Range,
+  ) {
+    super(range);
+  }
+
+  public static parse: (
+    parseExpr: Parser<TypeExpression>,
+  ) => Parser<BinOpExpr> = (parseExpr) =>
+    p.map(
+      p.sequence(
+        p.choice(...BIN_OPS.map((b) => p.literal(b))),
+        comment,
+        parseExpr,
+      ),
+      ([operator, , right], start, end) =>
+        new BinOpExpr(null as any, operator, right, {
+          start: toPlace(start),
+          end: toPlace(end),
+        }),
+    ) as Parser<BinOpExpr>;
+
+  toAstString() {
+    return `BinOp(${this.left.toAstString()}, ${JSON.stringify(this.operator)}, ${this.right.toAstString()})`;
+  }
+
+  toLangString() {
+    return `${this.left.toLangString()} ${this.operator} ${this.right.toLangString()}`;
+  }
+}
+
+export class UniOpExpr extends TypeExpression {
+  public readonly type = "UniOp";
+
+  constructor(
+    public operator: UniOp,
+    public operand: TypeExpression,
+    range: Range,
+  ) {
+    super(range);
+  }
+
+  public static parse: (
+    parseExpr: Parser<TypeExpression>,
+  ) => Parser<UniOpExpr> = (parseExpr) =>
+    p.map(
+      p.sequence(
+        p.choice(...UNI_OPS.map((b) => p.literal(b))),
+        comment,
+        parseExpr,
+      ),
+      ([operator, , operand], start, end) =>
+        new UniOpExpr(operator, operand, {
+          start: toPlace(start),
+          end: toPlace(end),
+        }),
+    ) as Parser<UniOpExpr>;
+
+  toAstString() {
+    return `UniOp(${JSON.stringify(this.operator)}, ${this.operand.toAstString()})`;
+  }
+
+  toLangString() {
+    return `${this.operator} ${this.operand.toLangString()}`;
+  }
+}
+
+export class IfExpr extends TypeExpression {
+  public readonly type = "IfExpr";
+
+  constructor(
+    public condition: TypeExpression,
+    public trueBranch: TypeExpression,
+    public elifBranches: {
+      condition: TypeExpression;
+      branch: TypeExpression;
+    }[],
+    public falseBranch: TypeExpression,
+    range: Range,
+  ) {
+    super(range);
+  }
+
+  toAstString() {
+    return `IfExpr(${this.condition.toAstString()}, ${this.trueBranch.toAstString()}, [${this.elifBranches
+      .map(
+        (elif) =>
+          `{ condition: ${elif.condition.toAstString()}, branch: ${elif.branch.toAstString()} }`,
+      )
+      .join(", ")}], ${this.falseBranch.toAstString()})`;
+  }
+
+  toLangString() {
+    const elifStr = this.elifBranches
+      .map(
+        (elif) =>
+          ` elif (${elif.condition.toLangString()}) ${elif.branch.toLangString()}`,
+      )
+      .join("");
+    return `if (${this.condition.toLangString()}) ${this.trueBranch.toLangString()}${elifStr} else ${this.falseBranch.toLangString()}`;
+  }
+
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<IfExpr> = (
+    parseExpr,
+  ) =>
+    p.map(
+      p.sequence(
+        p.literal("if"),
+        comment,
+        p.literal("("),
+        comment,
+        parseExpr,
+        comment,
+        p.literal(")"),
+        comment,
+        parseExpr,
+        p.many(
+          p.sequence(
+            comment,
+            p.literal("elif"),
+            comment,
+            p.literal("("),
+            comment,
+            parseExpr,
+            comment,
+            p.literal(")"),
+            comment,
+            parseExpr,
+          ),
+        ),
+        p.sequence(comment, p.literal("else"), comment, parseExpr),
+      ),
+      (
+        [, , , , condition, , , , trueBranch, elifBranches, elseBranch],
+        start,
+        end,
+      ) =>
+        new IfExpr(
+          condition,
+          trueBranch,
+          elifBranches.map(([, , , , , elifCondition, , , , elifBranch]) => ({
+            condition: elifCondition,
+            branch: elifBranch,
+          })),
+          elseBranch[3],
+          {
+            start: toPlace(start),
+            end: toPlace(end),
+          },
+        ),
+    ) as Parser<IfExpr>;
+}
+
+/**
+ * Name AppliedGenericExpr?
+ */
 export class NamedTypeExpr extends TypeExpression {
   public readonly type = "NamedType";
 
@@ -333,7 +551,7 @@ export class NamedTypeExpr extends TypeExpression {
   }
 
   toLangString() {
-    return `${this.name.name}${this.next ? `${this.next.toLangString()}` : ""}`;
+    return `${this.name.toLangString()}${this.next ? `${this.next.toLangString()}` : ""}`;
   }
 
   static parse: (parseExpr: Parser<TypeExpression>) => Parser<NamedTypeExpr> = (
@@ -357,6 +575,9 @@ export class NamedTypeExpr extends TypeExpression {
     ) as Parser<NamedTypeExpr>;
 }
 
+/**
+ * <A, B, ...> TypeExpression
+ */
 export class GenericTypeExpr extends TypeExpression {
   public readonly type = "GenericType";
 
@@ -403,6 +624,12 @@ export class GenericTypeExpr extends TypeExpression {
       ) as Parser<GenericTypeExpr>;
 }
 
+/**
+ * A
+ * A: Constraint
+ * A = Default
+ * A: Constraint = Default
+ */
 export class GenericParameter extends TypeExpression {
   public readonly type = "GenericParameter";
 
@@ -424,7 +651,7 @@ export class GenericParameter extends TypeExpression {
   }
 
   toLangString() {
-    return `${this.name.name}${
+    return `${this.name.toLangString()}${
       this.constraint ? `: ${this.constraint.toLangString()}` : ""
     }${this.defaultType ? ` = ${this.defaultType.toLangString()}` : ""}`;
   }
@@ -459,7 +686,7 @@ export class AppliedGenericExpr extends TypeExpression {
   constructor(
     public args: AppliedGenericArgument[],
     range: Range,
-    public next?: TypeExpression,
+    public next?: TypeExpression, // TODO: Figure out of this is necessary
   ) {
     super(range);
   }
@@ -485,18 +712,12 @@ export class AppliedGenericExpr extends TypeExpression {
         ),
         comment,
         p.literal(">"),
-        comment,
-        p.optional(parseExpr),
       ),
-      ([, , args, , , , next], start, end) =>
-        new AppliedGenericExpr(
-          args,
-          {
-            start: toPlace(start),
-            end: toPlace(end),
-          },
-          next || undefined,
-        ),
+      ([, , args], start, end) =>
+        new AppliedGenericExpr(args, {
+          start: toPlace(start),
+          end: toPlace(end),
+        }),
     ) as Parser<AppliedGenericExpr>;
 }
 
@@ -516,7 +737,7 @@ export class AppliedGenericArgument extends TypeExpression {
   }
 
   toLangString() {
-    return `${this.name ? `${this.name.name} = ` : ""}${this.value.toLangString()}`;
+    return `${this.name ? `${this.name.toLangString()} = ` : ""}${this.value.toLangString()}`;
   }
 
   static parse: (
@@ -612,7 +833,7 @@ export class ObjectProperty extends TypeExpression {
   }
 
   toLangString() {
-    return `${this.name.name}${this.optional ? "?" : ""}: ${this.value.toLangString()};`;
+    return `${this.name.toLangString()}${this.optional ? "?" : ""}: ${this.value.toLangString()};`;
   }
 
   static parse: (parseExpr: Parser<TypeExpression>) => Parser<ObjectProperty> =
@@ -767,8 +988,8 @@ export class AccessExpr extends TypeExpression {
   public readonly type = "Access";
 
   constructor(
-    public object: TypeExpression,
-    public property: Identifier,
+    public object: TypeExpression, // will be null just when parsing
+    public properties: Identifier[],
     range: Range,
   ) {
     super(range);
@@ -776,17 +997,26 @@ export class AccessExpr extends TypeExpression {
 
   public static parse: (
     parseExpr: Parser<TypeExpression>,
-  ) => Parser<Identifier[]> = (parseExpr) =>
+  ) => Parser<AccessExpr> = (parseExpr) =>
     p.map(
       p.many(p.sequence(p.literal("."), comment, Identifier.parse(), comment)),
-      (accesses) => accesses.map(([, , id]) => id),
-    ) as Parser<Identifier[]>;
+      (accesses) =>
+        new AccessExpr(
+          null as any,
+          accesses.map(([, , id]) => id),
+          {
+            start: { index: 0, line: 0, column: 0 },
+            end: { index: 0, line: 0, column: 0 },
+          },
+        ),
+      // The actual object will be filled in by the caller (e.g. NamedTypeExpr)
+    ) as Parser<AccessExpr>;
 
   public override toAstString(): string {
-    return `Access(${this.object.toAstString()}, ${this.property.toAstString()})`;
+    return `Access(${this.object.toAstString()}, ${this.properties.map((p) => p.toAstString()).join(", ")})`;
   }
 
   public override toLangString(): string {
-    return `${this.object.toLangString()}.${this.property.toLangString()}`;
+    return `${this.object.toLangString()}.${this.properties.map((p) => p.toLangString()).join(".")}`;
   }
 }
