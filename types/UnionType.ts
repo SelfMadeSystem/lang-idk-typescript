@@ -25,6 +25,11 @@ export class UnionType extends AbstractType {
     return new UnionType(unique);
   }
 
+  override getSimplifiedType(env: Environment): AbstractType {
+    const newTypes = this.types.map((t) => t.getSimplifiedType(env));
+    return UnionType.create(newTypes, env);
+  }
+
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,

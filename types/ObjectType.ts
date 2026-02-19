@@ -12,6 +12,22 @@ export class ObjectType extends AbstractType {
     super();
   }
 
+  override getSimplifiedType(env: Environment): AbstractType {
+    const newProps: Record<string, AbstractType> = {};
+    let changed = false;
+    for (const [key, type] of Object.entries(this.properties)) {
+      const simplified = type.getSimplifiedType(env);
+      if (simplified !== type) {
+        changed = true;
+      }
+      newProps[key] = simplified;
+    }
+    if (changed) {
+      return new ObjectType(newProps);
+    }
+    return this;
+  }
+
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,
@@ -19,11 +35,6 @@ export class ObjectType extends AbstractType {
     const newProps: Record<string, AbstractType> = {};
     for (const [key, type] of Object.entries(this.properties)) {
       const r = type.applyTypeArguments(args, env);
-      if (r instanceof Error) {
-        throw new Error(
-          `Failed to apply type arguments to property '${key}': ${r.message}`,
-        );
-      }
       newProps[key] = r;
     }
     return new ObjectType(newProps);

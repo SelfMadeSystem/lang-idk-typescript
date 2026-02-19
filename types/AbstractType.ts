@@ -69,6 +69,20 @@ export abstract class AbstractType {
   }
 
   /**
+   * Simplifies the types if possible, but does not resolve aliases.
+   */
+  getSimplifiedType(env: Environment): AbstractType {
+    return this;
+  }
+
+  /**
+   * Determines if this type's structure contains a given type.
+   */
+  containsType(target: AbstractType, env: Environment): boolean {
+    return this === target;
+  }
+
+  /**
    * Applies type arguments to this type if it is generic.
    *
    * Should return a new type with the arguments applied, or an error if the arguments are invalid.

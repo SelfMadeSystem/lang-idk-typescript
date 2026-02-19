@@ -35,6 +35,30 @@ export class GenericType extends AbstractType {
     return this.params.findIndex((p) => p === param);
   }
 
+  override getSimplifiedType(env: Environment): AbstractType {
+    const simplifiedType = this.type.getSimplifiedType(env);
+    if (simplifiedType === this.type) {
+      return this;
+    }
+    const newParams = this.params.map(
+      (param) =>
+        new GenericParameter(
+          param.name,
+          param.constraint,
+          param.defaultType,
+        ),
+    );
+    const replaceArgs = new AppliedGenerics(newParams, {});
+    replaceArgs.argsByName.set(
+      this,
+      new Map(newParams.map((p) => [p.name, p])),
+    );
+    return new GenericType(
+      newParams,
+      simplifiedType.applyTypeArguments(replaceArgs, env),
+    );
+  }
+
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,

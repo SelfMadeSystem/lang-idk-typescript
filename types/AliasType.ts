@@ -30,6 +30,17 @@ export class AliasType extends AbstractType {
     }
   }
 
+  override getSimplifiedType(env: Environment): AbstractType {
+    const shallow = this.getShallowType(env);
+    if (shallow === this) {
+      return this;
+    }
+    if (shallow.containsType(this, env)) {
+      return this; // don't resolve recursive types
+    }
+    return shallow.getSimplifiedType(env);
+  }
+
   override compareToImpl(other: AbstractType, env: Environment): CompareResult {
     const trivial = this.trivialCompare(other, env);
     if (trivial) return trivial;

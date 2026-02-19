@@ -1,4 +1,3 @@
-type thing = (<A>{ a: A<int> });
+type thing = <A>{ a: A<int> };
 
-debugPrint(thing<<T> {t: T}>);
 print(thing<<T> {t: T}>);

@@ -12,6 +12,17 @@ export class NamedType extends AbstractType {
     super();
   }
 
+  override getSimplifiedType(env: Environment): AbstractType {
+    if (!this.type) {
+      return this;
+    }
+    const simplified = this.type.getSimplifiedType(env);
+    if (simplified === this.type) {
+      return this;
+    }
+    return new NamedType(this.name, simplified);
+  }
+
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,

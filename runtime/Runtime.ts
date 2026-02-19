@@ -123,7 +123,7 @@ export class Runtime {
       if (result2 instanceof AppliedGenerics) {
         return new Error("Type definitions cannot be applied generics " + atError(statement));
       }
-      namedType.type = result2.getShallowType(this.environment);
+      namedType.type = result2.getShallowType(this.environment).getSimplifiedType(this.environment);
       return;
     }
     if (statement instanceof TypeAlias) {
@@ -143,7 +143,7 @@ export class Runtime {
       if (result2 instanceof AppliedGenerics) {
         return new Error("Type aliases cannot be applied generics " + atError(statement));
       }
-      this.environment.set(statement.name.name, result2.getShallowType(this.environment));
+      this.environment.set(statement.name.name, result2.getShallowType(this.environment).getSimplifiedType(this.environment));
       return;
     }
     if (statement instanceof FunctionCall) {
@@ -435,7 +435,12 @@ export class Runtime {
               { cause: result },
             );
           }
-          return result;
+          if (result instanceof AppliedGenerics) {
+            return new Error(
+              `Applied generics cannot be printed ${atError(arg)}`,
+            );
+          }
+          return result.getShallowType(this.environment).getSimplifiedType(this.environment);
         });
         for (const arg of args) {
           if (arg instanceof Error) {
@@ -458,7 +463,12 @@ export class Runtime {
               { cause: result },
             );
           }
-          return result;
+          if (result instanceof AppliedGenerics) {
+            return new Error(
+              `Applied generics cannot be printed ${atError(arg)}`,
+            );
+          }
+          return result.getShallowType(this.environment).getSimplifiedType(this.environment);
         });
         for (const arg of args) {
           if (arg instanceof Error) {
@@ -583,6 +593,6 @@ export class Runtime {
       );
     }
     const [a, b] = argResults as [AbstractType, AbstractType];
-    return [a.getShallowType(env), b.getShallowType(env)];
+    return [a.getShallowType(env).getSimplifiedType(env), b.getShallowType(env).getSimplifiedType(env)];
   }
 }

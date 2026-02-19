@@ -25,12 +25,20 @@ export abstract class AbstractLazyType extends AbstractType {
       const result = this.compute(env);
       if (result && result !== this.type) {
         this.computed = result.getShallowType(env);
-        return result;
+        return this.computed;
       }
       return this;
     } finally {
       this.isGettingShallowType = false;
     }
+  }
+
+  override getSimplifiedType(env: Environment): AbstractType {
+    if (!this.computed) this.getShallowType(env);
+    if (this.computed) {
+      return this.computed.getSimplifiedType(env);
+    }
+    return this;
   }
 
   protected override compareToImpl(
@@ -79,10 +87,10 @@ export abstract class AbstractLazyType extends AbstractType {
   abstract toStringImpl(env: Environment): string;
 
   override toString(env: Environment): string {
-    if (!this.computed) this.getShallowType(env);
-    if (this.computed) {
-      return this.computed.toString(env);
-    }
+    // if (!this.computed) this.getShallowType(env);
+    // if (this.computed) {
+    //   return this.computed.toString(env);
+    // }
     return this.toStringImpl(env);
   }
 }
@@ -183,7 +191,11 @@ export class LazyIntersectType extends AbstractLazyType {
     super(type);
   }
 
-  public static create(type: AbstractType, other: AbstractType, env: Environment): AbstractType {
+  public static create(
+    type: AbstractType,
+    other: AbstractType,
+    env: Environment,
+  ): AbstractType {
     const comparison = type.compareTo(other, env);
     if (comparison.type === "equal") {
       return type;
