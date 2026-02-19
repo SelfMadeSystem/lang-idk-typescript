@@ -143,6 +143,29 @@ export class GenericType extends AbstractType {
   }
 
   override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    if (other instanceof NeverType) {
+      return other;
+    }
+    if (!(other instanceof GenericType)) {
+      this.params.forEach((param) => (param.interConstraint = param.constraint));
+      const intersected = this.type.intersectWith(other, env);
+      if (intersected instanceof NeverType) {
+        return intersected;
+      }
+      const newParams = this.params.map(
+        (param) =>
+          new GenericParameter(param.name, param.interConstraint, param.defaultType),
+      );
+      const replaceArgs = new AppliedGenerics(newParams, {});
+      replaceArgs.argsByName.set(
+        this,
+        new Map(this.params.map((p) => [p.name, p])),
+      );
+      return new GenericType(
+        newParams,
+        intersected.applyTypeArguments(replaceArgs, env),
+      );
+    }
     // TODO
     return this;
   }
@@ -168,6 +191,7 @@ export class GenericParameter extends AbstractType {
   public parent: GenericType = null as any;
   public thisIndex: number = -1;
   public comparisons: Map<number, CompareResult> = new Map();
+  public interConstraint: AbstractType | null = null; // just used for intersection
 
   constructor(
     public name: string,
@@ -203,6 +227,23 @@ export class GenericParameter extends AbstractType {
       return arg;
     }
     if (this.defaultType) {
+      if (this.constraint) {
+        const constraintResult = this.defaultType.compareTo(this.constraint, env);
+        if (
+          constraintResult.type === "incompatible" ||
+          constraintResult.type === "wider"
+        ) {
+          throw new Error(
+            `Default type ${this.defaultType.toString(env)} does not satisfy constraint ${this.constraint.toString(
+              env,
+            )} for generic parameter ${this.name}. Comparison result: ${constraintResult.type}${
+              "reason" in constraintResult
+                ? ` (${constraintResult.reason})`
+                : ""
+            }`,
+          );
+        }
+      }
       return this.defaultType.applyTypeArguments(args, env);
     }
     return this;
@@ -272,7 +313,9 @@ export class GenericParameter extends AbstractType {
   }
 
   override intersectWith(other: AbstractType, env: Environment): AbstractType {
-    // TODO
+    if (this.interConstraint) {
+      this.interConstraint = this.interConstraint.intersectWith(other, env);
+    } else this.interConstraint = other;
     return this;
   }
 

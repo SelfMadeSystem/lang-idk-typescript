@@ -33,6 +33,10 @@ export class PrimitiveType extends AbstractType {
       if (other.inherits.includes(this.name)) {
         return { type: "wider" };
       }
+      return {
+        type: "incompatible",
+        reason: `Primitive types ${this.name} and ${other.name} are incompatible`,
+      };
     }
     return other.compareAgainst(this, env);
   }

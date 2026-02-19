@@ -36,8 +36,8 @@ export class Environment {
   }
 
   define(name: string, type: AbstractType): Error | null {
-    const t = this.lookup(name);
-    if (t === null || t instanceof AliasType) {
+    const t = this.types.get(name);
+    if (!t || t instanceof AliasType) {
       this.types.set(name, type);
       return null;
     }

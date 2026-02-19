@@ -341,7 +341,23 @@ export class Runtime {
           }
           types.push(typeResult);
         }
-        return UnionType.create(types, this.environment);
+        const union = UnionType.create(types, this.environment);
+        if (expression.appliedGeneric) {
+          const appliedGenericResult = this.runExpression(expression.appliedGeneric);
+          if (appliedGenericResult instanceof Error) {
+            return new Error(
+              `Failed to evaluate applied generic on union type ${atError(expression)}: ${appliedGenericResult.message}`,
+              { cause: appliedGenericResult },
+            );
+          }
+          if (!(appliedGenericResult instanceof AppliedGenerics)) {
+            return new Error(
+              `Expected an applied generic on union type, got ${typeof appliedGenericResult} ${atError(expression)}`,
+            );
+          }
+          return union.applyTypeArguments(appliedGenericResult, this.environment);
+        }
+        return union;
       }
       if (expression instanceof InterTypeExpr) {
         const types: AbstractType[] = [];
@@ -364,6 +380,22 @@ export class Runtime {
         let result: AbstractType = types[0]!;
         for (let i = 1; i < types.length; i++) {
           result = result.intersectWith(types[i]!, this.environment);
+        }
+        
+        if (expression.appliedGeneric) {
+          const appliedGenericResult = this.runExpression(expression.appliedGeneric);
+          if (appliedGenericResult instanceof Error) {
+            return new Error(
+              `Failed to evaluate applied generic on intersection type ${atError(expression)}: ${appliedGenericResult.message}`,
+              { cause: appliedGenericResult },
+            );
+          }
+          if (!(appliedGenericResult instanceof AppliedGenerics)) {
+            return new Error(
+              `Expected an applied generic on intersection type, got ${typeof appliedGenericResult} ${atError(expression)}`,
+            );
+          }
+          result = result.applyTypeArguments(appliedGenericResult, this.environment);
         }
         return result;
       }

@@ -336,24 +336,25 @@ export class NamedTypeExpr extends TypeExpression {
     return `${this.name.name}${this.next ? `${this.next.toLangString()}` : ""}`;
   }
 
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<NamedTypeExpr> =
-    (parseExpr) =>
-      p.map(
-        p.sequence(
-          Identifier.parse(),
-          comment,
-          p.optional(AppliedGenericExpr.parse(parseExpr)),
+  static parse: (parseExpr: Parser<TypeExpression>) => Parser<NamedTypeExpr> = (
+    parseExpr,
+  ) =>
+    p.map(
+      p.sequence(
+        Identifier.parse(),
+        comment,
+        p.optional(AppliedGenericExpr.parse(parseExpr)),
+      ),
+      ([name, , next], start, end) =>
+        new NamedTypeExpr(
+          name,
+          {
+            start: toPlace(start),
+            end: toPlace(end),
+          },
+          next || undefined,
         ),
-        ([name, , next], start, end) =>
-          new NamedTypeExpr(
-            name,
-            {
-              start: toPlace(start),
-              end: toPlace(end),
-            },
-            next || undefined,
-          ),
-      ) as Parser<NamedTypeExpr>;
+    ) as Parser<NamedTypeExpr>;
 }
 
 export class GenericTypeExpr extends TypeExpression {
@@ -676,6 +677,7 @@ export class UnionTypeExpr extends TypeExpression {
   constructor(
     public options: TypeExpression[],
     range: Range,
+    public appliedGeneric?: AppliedGenericExpr,
   ) {
     super(range);
   }
@@ -698,16 +700,20 @@ export class UnionTypeExpr extends TypeExpression {
         p.sepBy(parseExpr, p.sequence(comment, p.literal("|"), comment)),
         comment,
         p.literal(")"),
+        comment,
+        p.optional(AppliedGenericExpr.parse(parseExpr)),
       ),
-      ([, , options], start, end) =>
+      ([, , options, , , , appliedGeneric], start, end) =>
         options.length === 0
           ? null
-          : options.length === 1
-            ? options[0]
-            : new UnionTypeExpr(options, {
+          : new UnionTypeExpr(
+              options,
+              {
                 start: toPlace(start),
                 end: toPlace(end),
-              }),
+              },
+              appliedGeneric || undefined,
+            ),
     ) as Parser<UnionTypeExpr>;
 }
 
@@ -717,6 +723,7 @@ export class InterTypeExpr extends TypeExpression {
   constructor(
     public expressions: TypeExpression[],
     range: Range,
+    public appliedGeneric?: AppliedGenericExpr,
   ) {
     super(range);
   }
@@ -739,16 +746,20 @@ export class InterTypeExpr extends TypeExpression {
         p.sepBy(parseExpr, p.sequence(comment, p.literal("&"), comment)),
         comment,
         p.literal(")"),
+        comment,
+        p.optional(AppliedGenericExpr.parse(parseExpr)),
       ),
-      ([, , options], start, end) =>
+      ([, , options, , , , appliedGeneric], start, end) =>
         options.length === 0
           ? null
-          : options.length === 1
-            ? options[0]
-            : new InterTypeExpr(options, {
+          : new InterTypeExpr(
+              options,
+              {
                 start: toPlace(start),
                 end: toPlace(end),
-              }),
+              },
+              appliedGeneric || undefined,
+            ),
     ) as Parser<InterTypeExpr>;
 }
 
