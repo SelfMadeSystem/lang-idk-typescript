@@ -394,7 +394,7 @@ export class GenericParameter extends AbstractType {
 
   override intersectWith(other: AbstractType, env: Environment): AbstractType {
     if (this.intersecting || !this.merging) {
-      return new LazyIntersectType(this, other);
+      return LazyIntersectType.create(this, other, env);
     }
 
     this.intersecting = true;
@@ -407,7 +407,7 @@ export class GenericParameter extends AbstractType {
 
       const comparison = this.interConstraint.compareTo(other, env);
       if (comparison.type === "wider" || comparison.type === "incompatible") {
-        return new LazyIntersectType(this, other);
+        return LazyIntersectType.create(this, other, env);
       }
 
       return this;

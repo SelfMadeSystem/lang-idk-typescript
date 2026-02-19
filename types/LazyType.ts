@@ -27,7 +27,7 @@ export abstract class AbstractLazyType extends AbstractType {
         this.computed = result.getShallowType(env);
         return result;
       }
-      return this.type;
+      return this;
     } finally {
       this.isGettingShallowType = false;
     }
@@ -176,11 +176,19 @@ export class LazyAccessType extends AbstractLazyType {
 }
 
 export class LazyIntersectType extends AbstractLazyType {
-  public constructor(
+  private constructor(
     type: AbstractType,
     public readonly other: AbstractType,
   ) {
     super(type);
+  }
+
+  public static create(type: AbstractType, other: AbstractType, env: Environment): AbstractType {
+    const comparison = type.compareTo(other, env);
+    if (comparison.type === "equal") {
+      return type;
+    }
+    return new LazyIntersectType(type, other);
   }
 
   override applyTypeArguments(
