@@ -174,3 +174,86 @@ export class LazyAccessType extends AbstractLazyType {
     return `LazyAccessType(type: ${this.type.debugString()}, property: ${this.property})`;
   }
 }
+
+export class LazyIntersectType extends AbstractLazyType {
+  public constructor(
+    type: AbstractType,
+    public readonly other: AbstractType,
+  ) {
+    super(type);
+  }
+
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType {
+    return new LazyIntersectType(
+      this.type.applyTypeArguments(args, env),
+      this.other.applyTypeArguments(args, env),
+    );
+  }
+
+  protected override compareToImpl(
+    other: AbstractType,
+    env: Environment,
+  ): CompareResult {
+    if (!this.computed) this.getShallowType(env); // try to compute first
+    if (this.computed) {
+      return this.computed.compareTo(other, env);
+    }
+    const trivial = this.trivialCompare(other, env);
+    if (trivial) {
+      return trivial;
+    }
+    const comparisons = [
+      this.type.compareTo(other, env),
+      this.other.compareTo(other, env),
+    ];
+    if (comparisons.some((c) => c.type === "incompatible")) {
+      return {
+        type: "incompatible",
+        reason: comparisons.find((c) => c.type === "incompatible")!.reason,
+      };
+    }
+    const hasWider = comparisons.some((c) => c.type === "wider");
+    const hasNarrower = comparisons.some((c) => c.type === "narrower");
+    if (hasWider && hasNarrower) {
+      return { type: "incompatible", reason: "Conflicting comparisons" };
+    }
+    if (hasWider) {
+      return { type: "wider" };
+    }
+    if (hasNarrower) {
+      return { type: "narrower" };
+    }
+    return { type: "equal" };
+  }
+
+  override intersectWith(other: AbstractType, env: Environment): AbstractType {
+    return new LazyIntersectType(this, other);
+  }
+
+  override compute(env: Environment): AbstractType | null {
+    const shallow = this.type.getShallowType(env);
+    if (shallow instanceof AliasType) {
+      return null;
+    }
+    const result = shallow.intersectWith(this.other, env);
+    if (
+      result instanceof LazyIntersectType &&
+      result.type === this.type &&
+      result.other === this.other
+    ) {
+      return null;
+    }
+    return result;
+  }
+
+  override toStringImpl(env: Environment): string {
+    return this.type.toString(env) + " & " + this.other.toString(env);
+  }
+
+  override debugString(): string {
+    return `LazyIntersectType(type: ${this.type.debugString()}, other: ${this.other.debugString()})`;
+  }
+}
