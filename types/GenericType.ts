@@ -35,6 +35,10 @@ export class GenericType extends AbstractType {
     return this.params.findIndex((p) => p === param);
   }
 
+  override isIncomplete(env: Environment): boolean {
+    return true;
+  }
+
   override getSimplifiedType(env: Environment): AbstractType {
     const simplifiedType = this.type.getSimplifiedType(env);
     if (simplifiedType === this.type) {
@@ -42,11 +46,7 @@ export class GenericType extends AbstractType {
     }
     const newParams = this.params.map(
       (param) =>
-        new GenericParameter(
-          param.name,
-          param.constraint,
-          param.defaultType,
-        ),
+        new GenericParameter(param.name, param.constraint, param.defaultType),
     );
     const replaceArgs = new AppliedGenerics(newParams, {});
     replaceArgs.argsByName.set(
@@ -412,6 +412,10 @@ export class GenericParameter extends AbstractType {
     return { type: "wider" };
   }
 
+  override isIncomplete(env: Environment): boolean {
+    return true; // generic parameters are always incomplete until they are replaced with actual types
+  }
+
   override getProperty(name: string, env: Environment): AbstractType {
     return new LazyAccessType(this, name);
   }
@@ -424,7 +428,6 @@ export class GenericParameter extends AbstractType {
     this.intersecting = true;
 
     try {
-
       if (this.interConstraint) {
         this.interConstraint = this.interConstraint.intersectWith(other, env);
       } else this.interConstraint = other;

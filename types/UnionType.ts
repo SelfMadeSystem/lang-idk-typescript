@@ -30,6 +30,17 @@ export class UnionType extends AbstractType {
     return UnionType.create(newTypes, env);
   }
 
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    return this.types.some((t) => t.containsType(target, env));
+  }
+
+  override isIncomplete(env: Environment): boolean {
+    return this.types.some((t) => t.isIncomplete(env));
+  }
+
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,

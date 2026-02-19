@@ -28,6 +28,27 @@ export class ObjectType extends AbstractType {
     return this;
   }
 
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    for (const type of Object.values(this.properties)) {
+      if (type.containsType(target, env)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  override isIncomplete(env: Environment): boolean {
+    for (const type of Object.values(this.properties)) {
+      if (type.isIncomplete(env)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   override applyTypeArguments(
     args: AppliedGenerics,
     env: Environment,

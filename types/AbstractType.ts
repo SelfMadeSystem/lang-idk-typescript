@@ -83,6 +83,13 @@ export abstract class AbstractType {
   }
 
   /**
+   * Determines if this type is incomplete.
+   */
+  isIncomplete(env: Environment): boolean {
+    return false;
+  }
+
+  /**
    * Applies type arguments to this type if it is generic.
    *
    * Should return a new type with the arguments applied, or an error if the arguments are invalid.

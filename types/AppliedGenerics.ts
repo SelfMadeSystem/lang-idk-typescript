@@ -25,6 +25,20 @@ export class AppliedGenerics {
     return argsForGeneric.get(paramName) || null;
   }
 
+  containsType(target: AbstractType, env: Environment): boolean {
+    for (const arg of this.positionalArgs) {
+      if (arg.containsType(target, env)) {
+        return true;
+      }
+    }
+    for (const arg of Object.values(this.namedArgs)) {
+      if (arg.containsType(target, env)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /**
    * Returns an error if the provided arguments are invalid for the given generic.
    * Returns the list of missing parameters if some parameters are missing but the provided arguments are otherwise valid.

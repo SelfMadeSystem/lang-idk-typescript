@@ -1,3 +1,4 @@
+import type { BinOp } from "../parser/ast";
 import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
@@ -54,6 +55,12 @@ export abstract class AbstractLazyType extends AbstractType {
       return trivial;
     }
     return this.getShallowType(env).compareTo(other, env);
+  }
+
+  abstract override containsType(target: AbstractType, env: Environment): boolean;
+
+  override isIncomplete(env: Environment): boolean {
+    return true; // lazy types are considered incomplete until computed
   }
 
   override getProperty(name: string, env: Environment): AbstractType {
@@ -114,9 +121,22 @@ export class LazyApplyArguments extends AbstractLazyType {
     );
   }
 
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    if (this.computed) {
+      return this.computed.containsType(target, env);
+    }
+    return (
+      this.type.containsType(target, env) ||
+      this.args.containsType(target, env)
+    );
+  }
+
   override compute(env: Environment): AbstractType | null {
     const shallow = this.type.getShallowType(env);
-    if (shallow instanceof AliasType) {
+    if (shallow.isIncomplete(env)) {
       return null;
     }
     const result = shallow.applyTypeArguments(this.args, env);
@@ -159,9 +179,19 @@ export class LazyAccessType extends AbstractLazyType {
     );
   }
 
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    if (this.computed) {
+      return this.computed.containsType(target, env);
+    }
+    return this.type.containsType(target, env);
+  }
+
   override compute(env: Environment): AbstractType | null {
     const shallow = this.type.getShallowType(env);
-    if (shallow instanceof AliasType) {
+    if (shallow.isIncomplete(env)) {
       return null;
     }
     const result = shallow.getProperty(this.property, env);
@@ -214,6 +244,19 @@ export class LazyIntersectType extends AbstractLazyType {
     );
   }
 
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    if (this.computed) {
+      return this.computed.containsType(target, env);
+    }
+    return (
+      this.type.containsType(target, env) ||
+      this.other.containsType(target, env)
+    );
+  }
+
   protected override compareToImpl(
     other: AbstractType,
     env: Environment,
@@ -256,8 +299,8 @@ export class LazyIntersectType extends AbstractLazyType {
 
   override compute(env: Environment): AbstractType | null {
     const shallow = this.type.getShallowType(env);
-    if (shallow instanceof AliasType) {
-      return null;
+    if (shallow.isIncomplete(env)) {
+      return null; // can't compute yet
     }
     const result = shallow.intersectWith(this.other, env);
     if (
@@ -296,7 +339,26 @@ export class LazyIfElseType extends AbstractLazyType {
     if (shallow instanceof PrimitiveType && shallow.name === "false") {
       return this.falseBranch;
     }
-    return null;
+    if (shallow.isIncomplete(env)) {
+      return null; // can't compute yet
+    }
+    throw new Error(
+      `Condition of LazyIfElseType must simplify to a boolean literal, but got ${shallow.toString(env)}`,
+    );
+  }
+
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    if (this.computed) {
+      return this.computed.containsType(target, env);
+    }
+    return (
+      this.condition.containsType(target, env) ||
+      this.trueBranch.containsType(target, env) ||
+      this.falseBranch.containsType(target, env)
+    );
   }
 
   override applyTypeArguments(
@@ -338,5 +400,92 @@ export class LazyIfElseType extends AbstractLazyType {
 
   override debugString(): string {
     return `LazyIfElseType(condition: ${this.condition.debugString()}, trueBranch: ${this.trueBranch.debugString()}, falseBranch: ${this.falseBranch.debugString()})`;
+  }
+}
+
+export class LazyBinOpType extends AbstractLazyType {
+  public constructor(
+    public readonly left: AbstractType,
+    public readonly op: BinOp,
+    public readonly right: AbstractType,
+  ) {
+    super(NeverType.get());
+  }
+
+  public static doOp(
+    left: AbstractType,
+    op: BinOp,
+    right: AbstractType,
+    env: Environment,
+  ): AbstractType | null {
+    const leftShallow = left.getShallowType(env).getSimplifiedType(env);
+    const rightShallow = right.getShallowType(env).getSimplifiedType(env);
+    if (leftShallow.isIncomplete(env) || rightShallow.isIncomplete(env)) {
+      return null; // can't compute yet
+    }
+    switch (op) {
+      case "is":
+        return leftShallow.compareTo(rightShallow, env).type === "equal"
+          ? PrimitiveType.get("true")
+          : PrimitiveType.get("false");
+      case "wider":
+        return leftShallow.compareTo(rightShallow, env).type === "wider"
+          ? PrimitiveType.get("true")
+          : PrimitiveType.get("false");
+      case "narrower":
+        return leftShallow.compareTo(rightShallow, env).type === "narrower"
+          ? PrimitiveType.get("true")
+          : PrimitiveType.get("false");
+      case "extends":
+        return leftShallow.compareTo(rightShallow, env).type === "narrower" ||
+          leftShallow.compareTo(rightShallow, env).type === "equal"
+          ? PrimitiveType.get("true")
+          : PrimitiveType.get("false");
+    }
+  }
+
+  override compute(env: Environment): AbstractType | null {
+    const result = LazyBinOpType.doOp(this.left, this.op, this.right, env);
+    if (
+      result instanceof LazyBinOpType &&
+      result.left === this.left &&
+      result.op === this.op &&
+      result.right === this.right
+    ) {
+      return null;
+    }
+    return result;
+  }
+
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    if (this.computed) {
+      return this.computed.containsType(target, env);
+    }
+    return (
+      this.left.containsType(target, env) ||
+      this.right.containsType(target, env)
+    );
+  }
+
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType {
+    return new LazyBinOpType(
+      this.left.applyTypeArguments(args, env),
+      this.op,
+      this.right.applyTypeArguments(args, env),
+    );
+  }
+
+  override toStringImpl(env: Environment): string {
+    return `${this.left.toString(env)} ${this.op} ${this.right.toString(env)}`;
+  }
+
+  override debugString(): string {
+    return `LazyBinOpType(left: ${this.left.debugString()}, op: ${this.op}, right: ${this.right.debugString()})`;
   }
 }

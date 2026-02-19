@@ -34,6 +34,23 @@ export class NamedType extends AbstractType {
     return new NamedType(this.name, r);
   }
 
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    if (!this.type) {
+      return false;
+    }
+    return this.type.containsType(target, env);
+  }
+
+  override isIncomplete(env: Environment): boolean {
+    if (!this.type) {
+      return true;
+    }
+    return this.type.isIncomplete(env);
+  }
+
   getNameSet(): Set<string> {
     if (this.nameSet.size === 0) {
       this.nameSet.add(this.name);
@@ -83,8 +100,7 @@ export class NamedType extends AbstractType {
         case "wider":
           return {
             type: "incompatible",
-            reason:
-              "Structural type is wider than nominal type " + this.name,
+            reason: "Structural type is wider than nominal type " + this.name,
           };
         case "equal":
           return {
@@ -95,7 +111,7 @@ export class NamedType extends AbstractType {
       }
     }
     const isSubset = this.getNameSet().isSubsetOf(other.getNameSet());
-    const isSuperset = this.getNameSet().isSupersetOf(other.getNameSet())
+    const isSuperset = this.getNameSet().isSupersetOf(other.getNameSet());
     if (isSubset && isSuperset) {
       // comparing (name){...} to (name){...}
       return this.compareSubtypeTo(other, env);

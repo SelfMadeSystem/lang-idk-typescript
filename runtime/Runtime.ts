@@ -18,12 +18,17 @@ import {
   InterTypeExpr,
   AbstractNode,
   IfExpr,
+  BinOpExpr,
 } from "../parser/ast";
 import { NeverType, type AbstractType } from "../types/AbstractType";
 import { AliasType } from "../types/AliasType";
 import { AppliedGenerics } from "../types/AppliedGenerics";
 import { GenericParameter, GenericType } from "../types/GenericType";
-import { LazyApplyArguments, LazyIfElseType } from "../types/LazyType";
+import {
+  LazyApplyArguments,
+  LazyBinOpType,
+  LazyIfElseType,
+} from "../types/LazyType";
 import { NamedType } from "../types/NamedType";
 import { ObjectType } from "../types/ObjectType";
 import { PrimitiveType } from "../types/Primitives";
@@ -487,7 +492,10 @@ export class Runtime {
             `Applied generics cannot be used in else branches of if expressions ${atError(expression)}`,
           );
         }
-        if (conditionResult instanceof PrimitiveType && conditionResult.name === "true") {
+        if (
+          conditionResult instanceof PrimitiveType &&
+          conditionResult.name === "true"
+        ) {
           return thenResult;
         } else if (
           conditionResult instanceof PrimitiveType &&
@@ -495,12 +503,54 @@ export class Runtime {
         ) {
           return elseResult;
         } else {
-          return new LazyIfElseType(
-            conditionResult,
-            thenResult,
-            elseResult,
+          return new LazyIfElseType(conditionResult, thenResult, elseResult);
+        }
+      }
+      if (expression instanceof BinOpExpr) {
+        const leftResult = this.runExpression(expression.left);
+        if (leftResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate left operand of binary expression ${atError(expression)}: ${leftResult.message}`,
+            { cause: leftResult },
           );
         }
+        if (leftResult instanceof AppliedGenerics) {
+          return new Error(
+            `Applied generics cannot be used as operands in binary expressions ${atError(expression)}`,
+          );
+        }
+        const rightResult = this.runExpression(expression.right);
+        if (rightResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate right operand of binary expression ${atError(expression)}: ${rightResult.message}`,
+            { cause: rightResult },
+          );
+        }
+        if (rightResult instanceof AppliedGenerics) {
+          return new Error(
+            `Applied generics cannot be used as operands in binary expressions ${atError(expression)}`,
+          );
+        }
+        if (
+          leftResult.isIncomplete(this.environment) ||
+          rightResult.isIncomplete(this.environment)
+        ) {
+          return new LazyBinOpType(
+            leftResult,
+            expression.operator,
+            rightResult,
+          );
+        }
+        const result = LazyBinOpType.doOp(
+          leftResult,
+          expression.operator,
+          rightResult,
+          this.environment,
+        );
+        if (!result) {
+          return new LazyBinOpType(leftResult, expression.operator, rightResult);
+        }
+        return result;
       }
     } catch (e) {
       if (e instanceof Error) {
