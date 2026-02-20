@@ -135,7 +135,6 @@ export class NamedType extends AbstractType {
       }
       return comparison;
     }
-    console.log(`Comparing ${this.name} to ${other.name}: isSubset=${isSubset}, isSuperset=${isSuperset}`);
     // comparing (a, b){...} to (a){...}
     // this must be narrower or incompatible
     if (comparison.type === "wider") {
