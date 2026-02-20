@@ -91,6 +91,10 @@ export class AliasType extends AbstractType {
     args: AppliedGenerics,
     env: Environment,
   ): AbstractType {
+    if (this.name.includes("$")) {
+      // TODO: figure out a better way to handle this
+      return this;
+    }
     const shallow = this.getShallowType(env);
     if (shallow === this) {
       return new LazyApplyArguments(this, args);

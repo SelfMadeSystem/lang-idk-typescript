@@ -3,6 +3,7 @@ import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
 import type { AppliedGenerics } from "./AppliedGenerics";
+import { GenericType } from "./GenericType";
 import { PrimitiveType } from "./Primitives";
 
 export abstract class AbstractLazyType extends AbstractType {
@@ -54,21 +55,39 @@ export abstract class AbstractLazyType extends AbstractType {
     if (trivial) {
       return trivial;
     }
-    return this.getShallowType(env).compareTo(other, env);
+    const shallow = this.getShallowType(env);
+    if (shallow !== this) {
+      return shallow.compareTo(other, env);
+    }
+    return {
+      type: "incompatible",
+      reason: `Unable to compare lazy type ${this.toString(env)} to ${other.toString(env)}`,
+    };
   }
 
-  abstract override containsType(target: AbstractType, env: Environment): boolean;
+  abstract override containsType(
+    target: AbstractType,
+    env: Environment,
+  ): boolean;
 
   override isIncomplete(env: Environment): boolean {
     return true; // lazy types are considered incomplete until computed
   }
 
   override getProperty(name: string, env: Environment): AbstractType {
-    return this.getShallowType(env).getProperty(name, env);
+    const shallow = this.getShallowType(env);
+    if (shallow === this) {
+      return NeverType.get();
+    }
+    return shallow.getProperty(name, env);
   }
 
   override intersectWith(other: AbstractType, env: Environment): AbstractType {
-    return this.getShallowType(env).intersectWith(other, env);
+    const shallow = this.getShallowType(env);
+    if (shallow === this) {
+      return other;
+    }
+    return shallow.intersectWith(other, env);
   }
 
   override isGeneric(): boolean {
@@ -129,14 +148,16 @@ export class LazyApplyArguments extends AbstractLazyType {
       return this.computed.containsType(target, env);
     }
     return (
-      this.type.containsType(target, env) ||
-      this.args.containsType(target, env)
+      this.type.containsType(target, env) || this.args.containsType(target, env)
     );
   }
 
   override compute(env: Environment): AbstractType | null {
     const shallow = this.type.getShallowType(env);
-    if (shallow.isIncomplete(env)) {
+    if (
+      (shallow.isIncomplete(env) && !shallow.isGeneric()) ||
+      shallow instanceof AliasType
+    ) {
       return null;
     }
     const result = shallow.applyTypeArguments(this.args, env);

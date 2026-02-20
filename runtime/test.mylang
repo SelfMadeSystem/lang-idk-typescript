@@ -1,1 +1,63 @@
-print(int extends number);
+type User {
+  name: string;
+  age: int;
+};
+
+type Admin (User & {
+  role: string;
+});
+
+narrower(Admin, User);
+
+type Some<T> T;
+type None;
+type Option = <T> (Some<T> | None);
+
+wider(Option<int>, Some<int>);
+
+type Ok<T> T;
+type Err<E> E;
+type Result = <T, E> (Ok<T> | Err<E>);
+
+wider(Result<int, string>, Ok<int>);
+
+type Box <T> {
+  value: T;
+};
+
+type InferValue = <A> A.value;
+equal(InferValue<Box<int>>, int);
+
+type LinkedList<T> {
+  value: T;
+  next: (LinkedList<T> | None);
+};
+
+print(LinkedList<string>); // LinkedList{ value: string, next: (LinkedList<string> | None) }
+
+type ApplyInt = <F> F<int>;
+equal(ApplyInt<LinkedList>, LinkedList<int>);
+
+type ThingA = <A> { a: A };
+type ThingB = <B> { a: B, b: B };
+
+equal((ThingA<number> & ThingB), <B: number>{ a: B, b: B });
+equal((<A> { a: A } & <A> { b: A }), <A0, A1> { a: A0, b: A1 });
+
+type and = <A: boolean, B: boolean> if (A) B else false;
+type or = <A: boolean, B: boolean> if (A) true else B;
+
+equal(and<true, true>, true);
+equal(and<true, false>, false);
+equal(or<true, false>, true);
+equal(or<false, false>, false);
+
+type Id int;
+type UserId Id;
+
+narrower(Id, int);
+narrower(UserId, Id);
+
+equal(int is int, true);
+equal(Id extends int, true);
+equal(UserId extends Id, true);

@@ -450,8 +450,8 @@ export class Runtime {
           );
         }
         let result = targetResult;
-        for (const p in expression.properties) {
-          result = result.getProperty(p, this.environment);
+        for (const p of expression.properties) {
+          result = result.getProperty(p.name, this.environment);
         }
         return result;
       }
@@ -548,7 +548,11 @@ export class Runtime {
           this.environment,
         );
         if (!result) {
-          return new LazyBinOpType(leftResult, expression.operator, rightResult);
+          return new LazyBinOpType(
+            leftResult,
+            expression.operator,
+            rightResult,
+          );
         }
         return result;
       }

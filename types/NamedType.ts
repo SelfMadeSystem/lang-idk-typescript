@@ -79,10 +79,10 @@ export class NamedType extends AbstractType {
       return { type: "equal" };
     }
     if (!myType) {
-      return { type: "narrower" };
+      return { type: "wider" };
     }
     if (!otherType) {
-      return { type: "wider" };
+      return { type: "narrower" };
     }
     return myType.compareTo(otherType, env);
   }
@@ -104,7 +104,7 @@ export class NamedType extends AbstractType {
           };
         case "equal":
           return {
-            type: "wider",
+            type: "narrower",
           };
         default:
           return comparison;
@@ -135,12 +135,18 @@ export class NamedType extends AbstractType {
       }
       return comparison;
     }
+    console.log(`Comparing ${this.name} to ${other.name}: isSubset=${isSubset}, isSuperset=${isSuperset}`);
     // comparing (a, b){...} to (a){...}
     // this must be narrower or incompatible
     if (comparison.type === "wider") {
       return {
         type: "incompatible",
         reason: `Type ${this.name} is structurally wider than ${other.name}, but is nominally narrower`,
+      };
+    }
+    if (comparison.type === "equal") {
+      return {
+        type: "narrower",
       };
     }
     return comparison;
@@ -152,6 +158,10 @@ export class NamedType extends AbstractType {
     }
     const intersected = this.type.intersectWith(other, env);
     return new NamedType(this.name, intersected);
+  }
+
+  override isGeneric(): boolean {
+    return this.type?.isGeneric() ?? false;
   }
 
   override getProperty(name: string, env: Environment): AbstractType {

@@ -250,7 +250,7 @@ export class FunctionCall extends Statement {
   static parse: (parseStmt: Parser<Statement>) => Parser<FunctionCall> = () =>
     p.map(
       p.sequence(
-        Identifier.parse(),
+        Identifier.parse(true),
         comment,
         p.literal("("),
         comment,
@@ -300,27 +300,36 @@ export class Identifier extends AbstractNode {
     return JSON.stringify(this.name);
   }
 
-  static parse: () => Parser<Identifier> = () =>
+  static parse: (includeKw?: boolean) => Parser<Identifier> = (
+    includeKw = false,
+  ) =>
     p.map(
-      p.choice(Identifier.parseIdentifier(), Identifier.parseStringLiteral()),
+      p.choice(
+        Identifier.parseIdentifier(includeKw),
+        Identifier.parseStringLiteral(),
+      ),
       (match, start, end) =>
         new Identifier(match, {
           start: toPlace(start),
           end: toPlace(end),
         }),
-    ) as Parser<Identifier>;
+    );
 
-  static parseIdentifier: () => Parser<string> = () =>
-    p.and(
-      p.regex(/[a-z_][a-z0-9_]*/i),
-      (name) => !KEYWORDS.includes(name as Keyword),
-    ) as Parser<string>;
+  static parseIdentifier: (includeKw?: boolean) => Parser<string> = (
+    includeKw = false,
+  ) =>
+    includeKw
+      ? p.regex(/[a-z_][a-z0-9_]*/i)
+      : p.and(
+          p.regex(/[a-z_][a-z0-9_]*/i),
+          (name) => !KEYWORDS.includes(name as Keyword),
+        );
 
   static parseStringLiteral: () => Parser<string> = () =>
     p.map(
       p.sequence(p.literal('"'), p.regex(/(?:\\.|[^"\\])*/), p.literal('"')),
       ([, content]) => JSON.parse(`"${content}"`),
-    ) as Parser<string>;
+    );
 }
 
 export abstract class TypeExpression extends AbstractNode {
@@ -483,20 +492,11 @@ export class IfExpr extends TypeExpression {
         comment,
         p.sequence(comment, p.literal("else"), comment, parseExpr),
       ),
-      (
-        [, , , , condition, , , , trueBranch, , elseBranch],
-        start,
-        end,
-      ) =>
-        new IfExpr(
-          condition,
-          trueBranch,
-          elseBranch[3],
-          {
-            start: toPlace(start),
-            end: toPlace(end),
-          },
-        ),
+      ([, , , , condition, , , , trueBranch, , elseBranch], start, end) =>
+        new IfExpr(condition, trueBranch, elseBranch[3], {
+          start: toPlace(start),
+          end: toPlace(end),
+        }),
     ) as Parser<IfExpr>;
 }
 
