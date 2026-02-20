@@ -61,3 +61,10 @@ narrower(UserId, Id);
 equal(int is int, true);
 equal(Id extends int, true);
 equal(UserId extends Id, true);
+
+type Generic = <A, B> { a: A, b: B };
+type GenInt = Generic<int>; // <B> { a: int, b: B }
+type GenIntFloat = GenInt<float>; // { a: int, b: float }
+
+equal(GenInt, <B> { a: int, b: B });
+equal(GenIntFloat, { a: int, b: float });
