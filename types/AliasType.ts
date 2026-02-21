@@ -7,6 +7,7 @@ export class AliasType extends AbstractType {
   public overrideName: string | null = null;
   protected isFindingShallow = false;
   protected isCheckingCompleteness = false;
+  protected isCheckingContains = false;
 
   constructor(public name: string) {
     super();
@@ -32,19 +33,25 @@ export class AliasType extends AbstractType {
   }
 
   override containsType(target: AbstractType, env: Environment): boolean {
-    if (this === target) {
+    if (this === target || this.isCheckingContains) {
       return true;
     }
-    const shallow = this.getShallowType(env);
-    if (shallow === this) {
-      return false;
+    this.isCheckingContains = true;
+
+    try {
+      const shallow = this.getShallowType(env);
+      if (shallow === this) {
+        return false;
+      }
+      return shallow.containsType(target, env);
+    } finally {
+      this.isCheckingContains = false;
     }
-    return shallow.containsType(target, env);
   }
 
   override isIncomplete(env: Environment): boolean {
     if (this.isCheckingCompleteness) {
-      return true; // recursive type, treat as incomplete
+      return false; // recursive type, treat as complete
     }
 
     this.isCheckingCompleteness = true;
@@ -53,9 +60,6 @@ export class AliasType extends AbstractType {
       const shallow = this.getShallowType(env);
       if (shallow === this) {
         return false;
-      }
-      if (shallow.containsType(this, env)) {
-        return true; // recursive type, treat as incomplete
       }
       return shallow.isIncomplete(env);
     } finally {

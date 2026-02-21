@@ -8,6 +8,7 @@ type Admin (User & {
   role: string;
 });
 
+// functions like "narrower", "wider", "equal" for testing the type system
 narrower(Admin, User);
 
 type Some<T> T;

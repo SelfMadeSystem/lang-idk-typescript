@@ -3,12 +3,11 @@ import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
 import type { AppliedGenerics } from "./AppliedGenerics";
-import { GenericType } from "./GenericType";
 import { PrimitiveType } from "./Primitives";
 
 export abstract class AbstractLazyType extends AbstractType {
   protected computed: AbstractType | null = null;
-  protected isGettingShallowType = false;
+  protected isComputing = false;
 
   constructor(public readonly type: AbstractType) {
     super();
@@ -17,10 +16,10 @@ export abstract class AbstractLazyType extends AbstractType {
   abstract compute(env: Environment): AbstractType | null;
 
   override getShallowType(env: Environment): AbstractType {
-    if (this.isGettingShallowType) {
+    if (this.isComputing) {
       return this.type;
     }
-    this.isGettingShallowType = true;
+    this.isComputing = true;
     try {
       if (this.computed) {
         return this.computed;
@@ -32,7 +31,7 @@ export abstract class AbstractLazyType extends AbstractType {
       }
       return this;
     } finally {
-      this.isGettingShallowType = false;
+      this.isComputing = false;
     }
   }
 
