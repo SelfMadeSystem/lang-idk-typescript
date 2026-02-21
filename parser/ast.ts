@@ -544,13 +544,14 @@ export class NamedTypeExpr extends TypeExpression {
 }
 
 /**
- * <A, B, ...> TypeExpression
+ * <A, B, ...; Constraint1, Constraint2> TypeExpression
  */
 export class GenericTypeExpr extends TypeExpression {
   public readonly type = "GenericType";
 
   constructor(
     public args: GenericParameter[],
+    public constraints: TypeExpression[],
     range: Range,
     public next?: TypeExpression,
   ) {
@@ -562,7 +563,10 @@ export class GenericTypeExpr extends TypeExpression {
   }
 
   toLangString() {
-    return `<${this.args.map((arg) => arg.toLangString()).join(", ")}>${this.next ? `${this.next.toLangString()}` : ""}`;
+    const args = this.args.map((arg) => arg.toLangString()).join(", ");
+    const constraints = this.constraints.map((c) => c.toLangString()).join(", ");
+    const next = this.next ? this.next.toLangString() : "";
+    return `<${args}${constraints ? `; ${constraints}` : ""}>${next}`;
   }
 
   static parse: (parseExpr: Parser<TypeExpression>) => Parser<GenericTypeExpr> =
@@ -576,13 +580,24 @@ export class GenericTypeExpr extends TypeExpression {
             p.sequence(comment, p.literal(","), comment),
           ),
           comment,
+          p.optional(
+            p.sequence(
+              p.literal(";"),
+              comment,
+              p.sepBy(
+                parseExpr,
+                p.sequence(comment, p.literal(","), comment),
+              ),
+            ),
+          ),
           p.literal(">"),
           comment,
           p.optional(parseExpr),
         ),
-        ([, , args, , , , next], start, end) =>
+        ([, , args, , constraints, , , next], start, end) =>
           new GenericTypeExpr(
             args,
+            constraints ? constraints[2] : [],
             {
               start: toPlace(start),
               end: toPlace(end),
