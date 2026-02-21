@@ -1,33 +1,65 @@
 // stuff not implemented yet in the language
 
-// number ranges
+// tuples
+type IntFloatTuple = (int, float);
+type TupleFirst = <T> T.a;
+equal(TupleFirst<(int, float)>, int);
+
+// variadic generics
+type VariadicTuple = <T...> T; // T... would always produce a tuple type
+
+// Iterate over tuples and objects. no idea what the syntax would look like yet
+
+// Some way to get the type of T in the following types:
+type None;
+type Some<T> T; // <-- here
+type Option = <T> (Some<T> | None); // <-- and here
+// currently it's impossible to get the T in Some<T> or Option<T>
+
+// Pattern matching on types
+type MatchOption = <T> match T {
+  Some<U> => U;
+  None => void;
+  _ => never;
+};
+
+// Enum types
+type Color enum { Red, Green, Blue };
+type Result <T> enum { Ok T, Err string };
+type RedColor = Color.Red;
+type OkInt = Result<int>.Ok;
+
+// Function types
+type Fn1 = (int) => string;
+type Fn2 = <T> (T) => T;
+type Fn3 = <T, U> (T) => U;
+
+// Any string for identifiers using backticks (right now uses double quotes, but I want to reserve those for string literals)
+type `some type` = int;
+
+// Type exclusion
+type Shape = Circle | Square | Triangle;
+type NotCircle = Shape - Circle; // Square | Triangle
+type NotRed = Color - Color.Red; // Green | Blue
+
+// Fix generic parameters whose bounds refer to each other e.g. <A: B, B>
+type RecursiveBounds = <A: B, B> { a: A, b: B };
+// RecursiveBounds<int> should produce something akin to <B; int extends B> { a: int, b: B }
+// already implemented in the AST, but the type checker doesn't handle or generate it yet.
+
+// Prevent trivial infinite recursion e.g.
+type InfiniteGeneric = <A = B, B = A> A; // evaluating InfiniteGeneric<> currently hangs
+
+// String literal types
+// I'm not 100% convinced I want this since I don't want this to devolve into TypeScript-style structural typing
+type Direction = "up" | "down" | "left" | "right";
+
+// Number ranges
+// Same for this. I'm not sure values should be part of the type system, but maybe. idk. true and false currently are, so maybe this is fine.
 type positive = 0..;
 type negative = ..0;
-type absRange = <T: number>(-T)..=T | T..=(-T);
+type absRange = <T: number> ((-T)..=T | T..=(-T));
 
 equal(absRange<5>, absRange<-5>);
 equal(absRange<5>, -5..=5);
 equal(2i..=5i, 2i..6i); // (integers)
-
-// type-level functions
-// will automatically be implemented once the language becomes fully lazy
-type isPositive = <T: number> T extends positive;
-
-type not = <B: boolean> B is false;
-type and = <A: boolean, B: boolean> if A then B else false;
-type or = <A: boolean, B: boolean> if A then true else B;
-type xor = <A: boolean, B: boolean> if A then not<B> else B;
-
-// Lazy dot notation evaluation.
-// in general, I just need to make more of the language lazy
-type List<T> {
-  head: T,
-  tail: List<T> | None,
-};
-
-type Infer = <T: List> T.head;
-
-equal(Infer<List<string>>, string);
-
-// Prevent trivial infinite recursion e.g.
-type InfiniteGeneric = <A = B, B = A> A; // evaluating InfiniteGeneric<> currently hangs
