@@ -88,6 +88,14 @@ export class GenericType extends AbstractType {
         [],
         Object.fromEntries(newGeneric.params.map((p) => [p.name, p])),
       );
+
+      const map = args.argsByName.get(this);
+      if (!map) {
+        throw new Error(
+          `Failed to find args by name for generic type when applying type arguments to generic type.`,
+        );
+      }
+
       for (let i = 0; i < newGeneric.params.length; i++) {
         const param = newGeneric.params[i]!;
         const originalParam = this.params.find((p) => p.name === param.name);
@@ -101,29 +109,16 @@ export class GenericType extends AbstractType {
           newApplied,
           env,
         );
-        if (newConstraint instanceof Error) {
-          throw new Error(
-            `Failed to apply type arguments to constraint of generic parameter ${param.name}: ${newConstraint.message}`,
-          );
-        }
-
         param.constraint = newConstraint || null;
+
         const newDefault = originalParam.defaultType?.applyTypeArguments(
           newApplied,
           env,
         );
-        if (newDefault instanceof Error) {
-          throw new Error(
-            `Failed to apply type arguments to default type of generic parameter ${param.name}: ${newDefault.message}`,
-          );
-        }
         param.defaultType = newDefault || null;
-      }
 
-      args.argsByName.set(
-        newGeneric,
-        new Map(newGeneric.params.map((p) => [p.name, p])),
-      );
+        map.set(param.name, param);
+      }
 
       newGeneric.type = this.type.applyTypeArguments(args, env);
       env.setTemporary(argsString, newGeneric);

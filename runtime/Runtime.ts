@@ -714,6 +714,27 @@ export class Runtime {
         }
         break;
       }
+      case "debugger": {
+        const args = call.args.map((arg) => {
+          const result = this.runExpression(arg);
+          if (result instanceof Error) {
+            return new Error(
+              `Failed to evaluate argument for print ${atError(arg)}: ${result.message}`,
+              { cause: result },
+            );
+          }
+          if (result instanceof AppliedGenerics) {
+            return new Error(
+              `Applied generics cannot be printed ${atError(arg)}`,
+            );
+          }
+          return result
+            .getShallowType(this.environment)
+            .getSimplifiedType(this.environment);
+        });
+        debugger;
+        break;
+      }
       default:
         console.error(`Unknown function: ${call.name.name}`);
     }

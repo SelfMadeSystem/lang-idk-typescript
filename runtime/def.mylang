@@ -1,0 +1,6 @@
+type Generic = <A, B> { a: A, b: B };
+type GenInt = Generic<int>; // <B> { a: int, b: B }
+type GenIntFloat = GenInt<float>; // { a: int, b: float }
+
+debugger(Generic, GenInt);
+print(GenIntFloat);
