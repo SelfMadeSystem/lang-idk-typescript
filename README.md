@@ -9,7 +9,6 @@ Lang-IDK is a statically-typed, expressive programming language designed with a 
 - **Type-Level Logic**: Built-in support for boolean logic and conditional types at the type level.
 - **Recursive Types**: Define complex data structures like linked lists and trees.
 - **Algebraic Data Types**: Expressive constructs like `Option` and `Result` for functional programming.
-- **Explicit Subtyping**: Use `narrower` and `wider` to define subtype relationships.
 
 ## Example Code
 
