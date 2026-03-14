@@ -2,11 +2,7 @@ import {
   NamedTypeExpr,
   GenericTypeExpr,
   AppliedGenericExpr,
-  AppliedGenericArgument,
   ObjectTypeExpr,
-  ObjectProperty,
-  TupleTypeExpr, // tuples aren't supported yet
-  UnionTypeExpr,
   TypeAlias,
   TypeDef,
   TypeExpression,
@@ -15,10 +11,10 @@ import {
   FunctionCall,
   Module,
   AccessExpr,
-  InterTypeExpr,
   AbstractNode,
   IfExpr,
   BinOpExpr,
+  TupleTypeExpr,
 } from "../parser/ast";
 import { NeverType, type AbstractType } from "../types/AbstractType";
 import { AliasType } from "../types/AliasType";
@@ -347,91 +343,6 @@ export class Runtime {
         }
         return new ObjectType(properties);
       }
-      if (expression instanceof UnionTypeExpr) {
-        const types: AbstractType[] = [];
-        for (const typeExpr of expression.options) {
-          const typeResult = this.runExpression(typeExpr);
-          if (typeResult instanceof Error) {
-            return new Error(
-              `Failed to evaluate union type option ${atError(expression)}: ${typeResult.message}`,
-              { cause: typeResult },
-            );
-          }
-          if (typeResult instanceof AppliedGenerics) {
-            return new Error(
-              `Applied generics are not supported in union types ${atError(expression)}`,
-            );
-          }
-          types.push(typeResult);
-        }
-        const union = UnionType.create(types, this.environment);
-        if (expression.appliedGeneric) {
-          const appliedGenericResult = this.runExpression(
-            expression.appliedGeneric,
-          );
-          if (appliedGenericResult instanceof Error) {
-            return new Error(
-              `Failed to evaluate applied generic on union type ${atError(expression)}: ${appliedGenericResult.message}`,
-              { cause: appliedGenericResult },
-            );
-          }
-          if (!(appliedGenericResult instanceof AppliedGenerics)) {
-            return new Error(
-              `Expected an applied generic on union type, got ${typeof appliedGenericResult} ${atError(expression)}`,
-            );
-          }
-          return union.applyTypeArguments(
-            appliedGenericResult,
-            this.environment,
-          );
-        }
-        return union;
-      }
-      if (expression instanceof InterTypeExpr) {
-        const types: AbstractType[] = [];
-        for (const typeExpr of expression.expressions) {
-          const typeResult = this.runExpression(typeExpr);
-          if (typeResult instanceof Error) {
-            return new Error(
-              `Failed to evaluate intersection type option ${atError(expression)}: ${typeResult.message}`,
-              { cause: typeResult },
-            );
-          }
-          if (typeResult instanceof AppliedGenerics) {
-            return new Error(
-              `Applied generics are not supported in intersection types ${atError(expression)}`,
-            );
-          }
-          types.push(typeResult);
-        }
-
-        let result: AbstractType = types[0]!;
-        for (let i = 1; i < types.length; i++) {
-          result = result.intersectWith(types[i]!, this.environment);
-        }
-
-        if (expression.appliedGeneric) {
-          const appliedGenericResult = this.runExpression(
-            expression.appliedGeneric,
-          );
-          if (appliedGenericResult instanceof Error) {
-            return new Error(
-              `Failed to evaluate applied generic on intersection type ${atError(expression)}: ${appliedGenericResult.message}`,
-              { cause: appliedGenericResult },
-            );
-          }
-          if (!(appliedGenericResult instanceof AppliedGenerics)) {
-            return new Error(
-              `Expected an applied generic on intersection type, got ${typeof appliedGenericResult} ${atError(expression)}`,
-            );
-          }
-          result = result.applyTypeArguments(
-            appliedGenericResult,
-            this.environment,
-          );
-        }
-        return result;
-      }
       if (expression instanceof AccessExpr) {
         const targetResult = this.runExpression(expression.object);
         if (targetResult instanceof Error) {
@@ -551,6 +462,14 @@ export class Runtime {
           );
         }
         return result;
+      }
+      if (expression instanceof TupleTypeExpr) {
+        if (expression.elements.length !== 1) {
+          return new Error(
+            `Tuple types aren't supported yet ${atError(expression)}`,
+          );
+        }
+        return this.runExpression(expression.elements[0]!);
       }
     } catch (e) {
       if (e instanceof Error) {

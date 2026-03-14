@@ -1,9 +1,10 @@
-import type { BinOp } from "../parser/ast";
+import type { BinOp } from "../parser/ops";
 import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
 import type { AppliedGenerics } from "./AppliedGenerics";
 import { PrimitiveType } from "./Primitives";
+import { UnionType } from "./UnionType";
 
 export abstract class AbstractLazyType extends AbstractType {
   protected computed: AbstractType | null = null;
@@ -438,12 +439,18 @@ export class LazyBinOpType extends AbstractLazyType {
     right: AbstractType,
     env: Environment,
   ): AbstractType | null {
+    switch (op.op) {
+      case "|":
+        return UnionType.create([left, right], env);
+      case "&":
+        return left.intersectWith(right, env);
+    }
     const leftShallow = left.getShallowType(env).getSimplifiedType(env);
     const rightShallow = right.getShallowType(env).getSimplifiedType(env);
     if (leftShallow.isIncomplete(env) || rightShallow.isIncomplete(env)) {
       return null; // can't compute yet
     }
-    switch (op) {
+    switch (op.op) {
       case "is":
         return leftShallow.compareTo(rightShallow, env).type === "equal"
           ? PrimitiveType.get("true")
@@ -502,10 +509,10 @@ export class LazyBinOpType extends AbstractLazyType {
   }
 
   override toStringImpl(env: Environment): string {
-    return `${this.left.toString(env)} ${this.op} ${this.right.toString(env)}`;
+    return `${this.left.toString(env)} ${this.op.op} ${this.right.toString(env)}`;
   }
 
   override debugString(): string {
-    return `LazyBinOpType(left: ${this.left.debugString()}, op: ${this.op}, right: ${this.right.debugString()})`;
+    return `LazyBinOpType(left: ${this.left.debugString()}, op: ${this.op.op}, right: ${this.right.debugString()})`;
   }
 }

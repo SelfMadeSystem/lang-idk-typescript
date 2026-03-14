@@ -44,7 +44,7 @@ type ThingA = <A> { a: A };
 type ThingB = <B> { a: B, b: B };
 
 equal((ThingA<number> & ThingB), <B: number>{ a: B, b: B });
-equal((<A> { a: A } & <A> { b: A }), <A0, A1> { a: A0, b: A1 });
+equal((<A> { a: A }) & (<A> { b: A }), <A0, A1> { a: A0, b: A1 });
 
 type and = <A: boolean, B: boolean> if (A) B else false;
 type or = <A: boolean, B: boolean> if (A) true else B;

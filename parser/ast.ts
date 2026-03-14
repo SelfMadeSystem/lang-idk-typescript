@@ -1,11 +1,7 @@
+import { BIN_OPS, UNI_OPS, BIN_MAP, UNI_MAP, type BinOp, type UniOp } from "./ops";
 import type { InputState, Parser } from "./parserLib";
 import * as p from "./parserLib";
 Error.stackTraceLimit = Infinity;
-export const BIN_OPS = ["is", "wider", "narrower", "extends"] as const;
-export type BinOp = (typeof BIN_OPS)[number];
-
-export const UNI_OPS = [] as const;
-export type UniOp = (typeof UNI_OPS)[number];
 
 export const KEYWORDS = [
   ...BIN_OPS,
@@ -345,8 +341,6 @@ export abstract class TypeExpression extends AbstractNode {
               GenericTypeExpr.parse(parseExpr),
               ObjectTypeExpr.parse(parseExpr),
               TupleTypeExpr.parse(parseExpr),
-              UnionTypeExpr.parse(parseExpr),
-              InterTypeExpr.parse(parseExpr),
             ),
             p.optional(
               p.sequence(
@@ -365,7 +359,7 @@ export abstract class TypeExpression extends AbstractNode {
               const [, op] = after;
               if (op instanceof BinOpExpr) {
                 op.left = base;
-                return op;
+                return op.finalize();
               } else if (op instanceof AccessExpr) {
                 if (op.properties.length === 0) {
                   return base;
@@ -399,7 +393,7 @@ export class BinOpExpr extends TypeExpression {
   ) => Parser<BinOpExpr> = (parseExpr) =>
     p.map(
       p.sequence(
-        p.choice(...BIN_OPS.map((b) => p.literal(b))),
+        p.choice(...BIN_OPS.map((b) => p.map(p.literal(b.op), () => b))),
         comment,
         parseExpr,
       ),
@@ -410,12 +404,36 @@ export class BinOpExpr extends TypeExpression {
         }),
     ) as Parser<BinOpExpr>;
 
+  finalize(): BinOpExpr {
+    if (this.left === null) {
+      throw new Error("Left operand is not set for binary operator");
+    }
+
+    // If the right operand is a BinOpExpr with lower priority, we need to rotate the tree
+    if (
+      this.right instanceof BinOpExpr &&
+      this.right.operator.priority < this.operator.priority
+    ) {
+      const newLeft = new BinOpExpr(this.left, this.operator, this.right.left, {
+        start: this.range.start,
+        end: this.right.left.range.end,
+      });
+      const newRight = this.right.right;
+      const newOperator = this.right.operator;
+      return new BinOpExpr(newLeft.finalize(), newOperator, newRight, {
+        start: this.range.start,
+        end: newRight.range.end,
+      }).finalize();
+    }
+    return this;
+  }
+
   toAstString() {
-    return `BinOp(${this.left.toAstString()}, ${JSON.stringify(this.operator)}, ${this.right.toAstString()})`;
+    return `BinOp(${this.left.toAstString()}, ${JSON.stringify(this.operator.op)}, ${this.right.toAstString()})`;
   }
 
   toLangString() {
-    return `${this.left.toLangString()} ${this.operator} ${this.right.toLangString()}`;
+    return `(${this.left.toLangString()} ${this.operator.op} ${this.right.toLangString()})`;
   }
 }
 
@@ -435,7 +453,7 @@ export class UniOpExpr extends TypeExpression {
   ) => Parser<UniOpExpr> = (parseExpr) =>
     p.map(
       p.sequence(
-        p.choice(...UNI_OPS.map((b) => p.literal(b))),
+        p.choice(...UNI_OPS.map((b) => p.map(p.literal(b.op), () => b))),
         comment,
         parseExpr,
       ),
@@ -447,11 +465,11 @@ export class UniOpExpr extends TypeExpression {
     ) as Parser<UniOpExpr>;
 
   toAstString() {
-    return `UniOp(${JSON.stringify(this.operator)}, ${this.operand.toAstString()})`;
+    return `UniOp(${JSON.stringify(this.operator.op)}, ${this.operand.toAstString()})`;
   }
 
   toLangString() {
-    return `${this.operator} ${this.operand.toLangString()}`;
+    return `${this.operator.op} ${this.operand.toLangString()}`;
   }
 }
 
@@ -564,7 +582,9 @@ export class GenericTypeExpr extends TypeExpression {
 
   toLangString() {
     const args = this.args.map((arg) => arg.toLangString()).join(", ");
-    const constraints = this.constraints.map((c) => c.toLangString()).join(", ");
+    const constraints = this.constraints
+      .map((c) => c.toLangString())
+      .join(", ");
     const next = this.next ? this.next.toLangString() : "";
     return `<${args}${constraints ? `; ${constraints}` : ""}>${next}`;
   }
@@ -584,10 +604,7 @@ export class GenericTypeExpr extends TypeExpression {
             p.sequence(
               p.literal(";"),
               comment,
-              p.sepBy(
-                parseExpr,
-                p.sequence(comment, p.literal(","), comment),
-              ),
+              p.sepBy(parseExpr, p.sequence(comment, p.literal(","), comment)),
             ),
           ),
           p.literal(">"),
@@ -853,7 +870,7 @@ export class TupleTypeExpr extends TypeExpression {
   }
 
   toLangString() {
-    return `[${this.elements.map((el) => el.toLangString()).join(", ")}]`;
+    return `(${this.elements.map((el) => el.toLangString()).join(", ")})`;
   }
 
   static parse: (parseExpr: Parser<TypeExpression>) => Parser<TupleTypeExpr> = (
@@ -861,11 +878,11 @@ export class TupleTypeExpr extends TypeExpression {
   ) =>
     p.map(
       p.sequence(
-        p.literal("["),
+        p.literal("("),
         comment,
         p.sepBy(parseExpr, p.sequence(comment, p.literal(","), comment)),
         comment,
-        p.literal("]"),
+        p.literal(")"),
       ),
       ([, , elements], start, end) =>
         new TupleTypeExpr(elements, {
@@ -873,98 +890,6 @@ export class TupleTypeExpr extends TypeExpression {
           end: toPlace(end),
         }),
     ) as Parser<TupleTypeExpr>;
-}
-
-export class UnionTypeExpr extends TypeExpression {
-  public readonly type = "UnionType";
-
-  constructor(
-    public options: TypeExpression[],
-    range: Range,
-    public appliedGeneric?: AppliedGenericExpr,
-  ) {
-    super(range);
-  }
-
-  toAstString() {
-    return `UnionType([${this.options.map((opt) => opt.toAstString()).join(", ")}])`;
-  }
-
-  toLangString() {
-    return `(${this.options.map((opt) => opt.toLangString()).join(" | ")})`;
-  }
-
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<UnionTypeExpr> = (
-    parseExpr,
-  ) =>
-    p.map(
-      p.sequence(
-        p.literal("("),
-        comment,
-        p.sepBy(parseExpr, p.sequence(comment, p.literal("|"), comment)),
-        comment,
-        p.literal(")"),
-        comment,
-        p.optional(AppliedGenericExpr.parse(parseExpr)),
-      ),
-      ([, , options, , , , appliedGeneric], start, end) =>
-        options.length === 0
-          ? null
-          : new UnionTypeExpr(
-              options,
-              {
-                start: toPlace(start),
-                end: toPlace(end),
-              },
-              appliedGeneric || undefined,
-            ),
-    ) as Parser<UnionTypeExpr>;
-}
-
-export class InterTypeExpr extends TypeExpression {
-  public readonly type = "InterType";
-
-  constructor(
-    public expressions: TypeExpression[],
-    range: Range,
-    public appliedGeneric?: AppliedGenericExpr,
-  ) {
-    super(range);
-  }
-
-  toAstString() {
-    return `InterType([${this.expressions.map((opt) => opt.toAstString()).join(", ")}])`;
-  }
-
-  toLangString() {
-    return `(${this.expressions.map((opt) => opt.toLangString()).join(" & ")})`;
-  }
-
-  static parse: (parseExpr: Parser<TypeExpression>) => Parser<InterTypeExpr> = (
-    parseExpr,
-  ) =>
-    p.map(
-      p.sequence(
-        p.literal("("),
-        comment,
-        p.sepBy(parseExpr, p.sequence(comment, p.literal("&"), comment)),
-        comment,
-        p.literal(")"),
-        comment,
-        p.optional(AppliedGenericExpr.parse(parseExpr)),
-      ),
-      ([, , options, , , , appliedGeneric], start, end) =>
-        options.length === 0
-          ? null
-          : new InterTypeExpr(
-              options,
-              {
-                start: toPlace(start),
-                end: toPlace(end),
-              },
-              appliedGeneric || undefined,
-            ),
-    ) as Parser<InterTypeExpr>;
 }
 
 export class AccessExpr extends TypeExpression {
