@@ -1,4 +1,6 @@
 // TODO: Make "test bench" mode
+
+// named type
 type User {
   name: string;
   age: int;
@@ -8,11 +10,12 @@ type Admin (User & {
   role: string;
 });
 
-// functions like "narrower", "wider", "equal" for testing the type system
+// functions like "narrower", "wider", "equal" are just assertions for testing the type system
 narrower(Admin, User);
 
 type Some<T> T;
 type None;
+// Option is a type alias, not a named type (due to the `=`)
 type Option = <T> (Some<T> | None);
 
 wider(Option<int>, Some<int>);
