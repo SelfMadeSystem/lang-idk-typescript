@@ -1,8 +1,9 @@
-import type { BinOp } from "../parser/ops";
+import type { BinOp, UniOp } from "../parser/ops";
 import type { Environment } from "../runtime/Environment";
 import { AbstractType, NeverType, type CompareResult } from "./AbstractType";
 import { AliasType } from "./AliasType";
 import type { AppliedGenerics } from "./AppliedGenerics";
+import { NotType } from "./NotType";
 import { PrimitiveType } from "./Primitives";
 import { UnionType } from "./UnionType";
 
@@ -514,5 +515,78 @@ export class LazyBinOpType extends AbstractLazyType {
 
   override debugString(): string {
     return `LazyBinOpType(left: ${this.left.debugString()}, op: ${this.op.op}, right: ${this.right.debugString()})`;
+  }
+}
+
+export class LazyUniOpType extends AbstractLazyType {
+  public constructor(
+    public readonly op: UniOp,
+    public readonly operand: AbstractType,
+  ) {
+    super(NeverType.get());
+  }
+
+  public static doOp(
+    op: UniOp,
+    operand: AbstractType,
+    env: Environment,
+  ): AbstractType | null {
+    switch (op.op) {
+      case "!":
+        const operandShallow = operand.getShallowType(env).getSimplifiedType(env);
+        if (operandShallow.isIncomplete(env)) {
+          return null; // can't compute yet
+        }
+        if (operandShallow instanceof PrimitiveType) {
+          if (operandShallow.name === "true") {
+            return PrimitiveType.get("false");
+          }
+          if (operandShallow.name === "false") {
+            return PrimitiveType.get("true");
+          }
+        }
+        return NeverType.get(); // not type not supported until it's correctly implemented
+        // return new NotType(operandShallow);
+    }
+  }
+
+  override compute(env: Environment): AbstractType | null {
+    const result = LazyUniOpType.doOp(this.op, this.operand, env);
+    if (
+      result instanceof LazyUniOpType &&
+      result.op === this.op &&
+      result.operand === this.operand
+    ) {
+      return null;
+    }
+    return result;
+  }
+
+  override containsType(target: AbstractType, env: Environment): boolean {
+    if (this === target) {
+      return true;
+    }
+    if (this.computed) {
+      return this.computed.containsType(target, env);
+    }
+    return this.operand.containsType(target, env);
+  }
+
+  override applyTypeArguments(
+    args: AppliedGenerics,
+    env: Environment,
+  ): AbstractType {
+    return new LazyUniOpType(
+      this.op,
+      this.operand.applyTypeArguments(args, env),
+    );
+  }
+
+  override toStringImpl(env: Environment): string {
+    return `${this.op.op} ${this.operand.toString(env)}`;
+  }
+
+  override debugString(): string {
+    return `LazyUniOpType(op: ${this.op.op}, operand: ${this.operand.debugString()})`;
   }
 }

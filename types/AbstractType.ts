@@ -216,3 +216,41 @@ export class NeverType extends AbstractType {
     return "NeverType";
   }
 }
+
+export class AnyType extends AbstractType {
+  private static instance: AnyType | null = null;
+
+  private constructor() {
+    super();
+  }
+
+  static get(): AnyType {
+    if (!this.instance) {
+      this.instance = new AnyType();
+    }
+    return this.instance;
+  }
+
+  override compareToImpl(other: AbstractType): CompareResult {
+    if (other instanceof AnyType) {
+      return { type: "equal" };
+    }
+    return { type: "wider" };
+  }
+
+  override getProperty(): AbstractType {
+    return this;
+  }
+
+  override intersectWith(other: AbstractType): AbstractType {
+    return other;
+  }
+
+  override toString(env: Environment): string {
+    return "any";
+  }
+
+  override debugString(): string {
+    return "AnyType";
+  }
+}

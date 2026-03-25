@@ -15,8 +15,9 @@ import {
   IfExpr,
   BinOpExpr,
   TupleTypeExpr,
+  UniOpExpr,
 } from "../parser/ast";
-import { NeverType, type AbstractType } from "../types/AbstractType";
+import { AnyType, NeverType, type AbstractType } from "../types/AbstractType";
 import { AliasType } from "../types/AliasType";
 import { AppliedGenerics } from "../types/AppliedGenerics";
 import { GenericParameter, GenericType } from "../types/GenericType";
@@ -24,6 +25,7 @@ import {
   LazyApplyArguments,
   LazyBinOpType,
   LazyIfElseType,
+  LazyUniOpType,
 } from "../types/LazyType";
 import { NamedType } from "../types/NamedType";
 import { ObjectType } from "../types/ObjectType";
@@ -52,6 +54,7 @@ export class Runtime {
     this.definePrimitive("true", ["boolean"]);
     this.definePrimitive("false", ["boolean"]);
     this.environment.define("never", NeverType.get());
+    this.environment.define("any", AnyType.get());
   }
 
   public runModule(module: Module) {
@@ -460,6 +463,32 @@ export class Runtime {
             expression.operator,
             rightResult,
           );
+        }
+        return result;
+      }
+      if (expression instanceof UniOpExpr) {
+        const operandResult = this.runExpression(expression.operand);
+        if (operandResult instanceof Error) {
+          return new Error(
+            `Failed to evaluate operand of unary expression ${atError(expression)}: ${operandResult.message}`,
+            { cause: operandResult },
+          );
+        }
+        if (operandResult instanceof AppliedGenerics) {
+          return new Error(
+            `Applied generics cannot be used as operands in unary expressions ${atError(expression)}`,
+          );
+        }
+        if (operandResult.isIncomplete(this.environment)) {
+          return new LazyUniOpType(expression.operator, operandResult);
+        }
+        const result = LazyUniOpType.doOp(
+          expression.operator,
+          operandResult,
+          this.environment,
+        );
+        if (!result) {
+          return new LazyUniOpType(expression.operator, operandResult);
         }
         return result;
       }
